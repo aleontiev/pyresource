@@ -8,31 +8,33 @@
 
 #### Installation
 
-You can add this to your project with [DJ](https://djay.io)
+You can add this to your project with [DJ](https://djay.io).
 DJ is a Django-specific development tool that wraps pyenv, virtualenv, pip, and pipenv/poetry.
-It allows you to quickly add *django-resource* to your project and set up resources with the CLI.
+It allows you to quickly add *django-resource* to your project and set up your own resources with the CLI:
 
 ``` bash 
     dj add django-resource
 ```
 
-This will run an initialization blueprint to automatically add the code to:
+The above command will run an initialization blueprint to automatically add the code to:
 - Add `django_resource` to `settings.py:INSTALLED_APPS`
-- Add `DJANGO_RESOURCE` settings object to `settings.py` with defaults
-- Create `resources` package within your main package to contain all resource definitions
-- Add a Resource server mounted under `/resources`
+- Add a `DJANGO_RESOURCE` settings object to `settings.py` with defaults
+- Create a `resources` package within your main package to contain all resource definitions
+- Add a URL mount under `/resources` referencing the server
 
 #### Adding resources
 
 New blueprints will become available:
 
 Generate one resource from a given model:
+
 ```
     dj generate django_resource.resource --space=v0 --name=users --model=auth.User
 ```
 
 Generate resources from multiple models
-```
+
+``` python
     dj generate django_resource.resources --models=*
 ```
 
@@ -240,7 +242,7 @@ Create `yourapp/resources/spaces/v1/resources/users.py`:
             },
             inspect: True,
             method: True
-        }),  # default features: where, with, sort, page, group, inspect, method
+        },  # default features: where, with, sort, page, group, inspect, method
         access={
             'authenticated': {                  # for authenticated users
                 'get.record': {                          # allow GET /users/x/ 
