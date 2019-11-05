@@ -1,6 +1,6 @@
 # django-resource
 
-*django-resource* is an implementation of [Resource](https://resource.rest) for Django.
+**django-resource** is an implementation of [Resource](https://resource.rest) for Django.
 
 ## Getting Started
 
@@ -10,7 +10,7 @@
 
 You can add this to your project with [DJ](https://djay.io).
 DJ is a Django-specific development tool that wraps pyenv, virtualenv, pip, and pipenv/poetry.
-It allows you to quickly add *django-resource* to your project and set up your own resources with the CLI:
+It allows you to quickly add `django-resource` to your project and set up your own resources with the CLI:
 
 ``` bash 
     dj add django-resource
