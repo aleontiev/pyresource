@@ -28,19 +28,19 @@ New blueprints will become available:
 
 Generate one resource from a given model:
 
-```
+``` bash
     dj generate django_resource.resource --space=v0 --name=users --model=auth.User
 ```
 
 Generate resources from multiple models
 
-``` python
+``` bash
     dj generate django_resource.resources --models=*
 ```
 
 #### Running the server
 
-```
+``` bash
     dj serve 9000
 ```
 
@@ -50,7 +50,7 @@ Visit "http://localhost:9000/resources"
 
 #### Installation
 
-``` python
+``` bash
     pip install django_resource
     # ... or "poetry add django_resource"
     # ... or "pipenv add django_resource"
@@ -69,6 +69,7 @@ Add `django_resource` to `INSTALLED_APPS` in `settings.py`:
 #### Settings
 
 Create `DJANGO_RESOURCE` within `settings.py`:
+
 ``` python
     DJANGO_RESOURCE = {
     }
@@ -85,7 +86,8 @@ The recommended package path is "yourapp.resources" if your app name is "yourapp
 #### Server
 
 Create `yourapp/resources/server.py` with two spaces called "v0" and "v1":
-```
+
+``` python
     from django_resource.server import Server
     from .spaces.v0.space import v0
     from .spaces.v1.space import v1
@@ -118,7 +120,8 @@ Create space "v0" referencing resource "clients" for storing client data:
 Create space "v1" referencing "users", a refactor of clients using the same underlying model:
 
 Create `yourapp/resources/spaces/v1/space.py`:
-```
+
+``` python
     from django_resource.space import Space
     from .resources.users import users
     from .resources.groups import groups
@@ -134,7 +137,8 @@ Create `yourapp/resources/spaces/v1/space.py`:
 Create resource "clients" in space "v0":
 
 Create `yourapp/resources/spaces/v0/resources/users.py`:
-```
+
+``` python
     from django_resource.resource import Resource
 
     clients = Resource(
