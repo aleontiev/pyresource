@@ -8,8 +8,7 @@
 
 #### Installation
 
-You can add this to your project with [DJ](https://djay.io).
-DJ is a Django-specific development tool that wraps pyenv, virtualenv, pip, and pipenv/poetry.
+You can add this to your project with [DJ](https://djay.io), a developer utility tool for Django that wraps pyenv, virtualenv, pip, and poetry.
 It allows you to quickly add `django-resource` to your project and set up your own resources with the CLI:
 
 ``` bash 
@@ -18,24 +17,18 @@ It allows you to quickly add `django-resource` to your project and set up your o
 
 The above command will run an initialization blueprint to automatically add the code to:
 - Add `django_resource` to `settings.py:INSTALLED_APPS`
-- Add a `DJANGO_RESOURCE` settings object to `settings.py` with defaults
-- Create a `resources` package within your main package to contain all resource definitions
+- Add a `DJANGO_RESOURCE` settings object to `settings.py` with sane defaults
+- Create a `resources` package within your main package
 - Add a URL mount under `/resources` referencing the server
 
 #### Adding resources
 
 New blueprints will become available:
 
-Generate one resource from a given model:
+Generate a resource from a given model:
 
 ``` bash
     dj generate django_resource.resource --space=v0 --name=users --model=auth.User
-```
-
-Generate resources from multiple models
-
-``` bash
-    dj generate django_resource.resources --models=*
 ```
 
 #### Running the server
@@ -56,7 +49,7 @@ Visit "http://localhost:9000/resources"
     # ... or "pipenv add django_resource"
 ```
 
-#### Installed Apps
+##### Add to INSTALLED APPS
 
 Add `django_resource` to `INSTALLED_APPS` in `settings.py`:
 ``` python
@@ -66,7 +59,7 @@ Add `django_resource` to `INSTALLED_APPS` in `settings.py`:
     ]
 ```
 
-#### Settings
+##### Add to settings
 
 Create `DJANGO_RESOURCE` within `settings.py`:
 
@@ -75,7 +68,7 @@ Create `DJANGO_RESOURCE` within `settings.py`:
     }
 ```
 
-#### Package
+##### Add core packages
 
 All resource definitions for a single server should be defined in one subpackage of your project folder.
 The recommended package path is "yourapp.resources" if your app name is "yourapp".
@@ -83,21 +76,36 @@ The recommended package path is "yourapp.resources" if your app name is "yourapp
 - Create `yourapp/resources/__init__.py`
 - Create `yourapp/resources/spaces/__init__.py`
 
-#### Server
+##### Add server
 
-Create `yourapp/resources/server.py` with two spaces called "v0" and "v1":
+Create `yourapp/resources/server.py`, the entrypoint to your resource server.
 
 ``` python
     from django_resource.server import Server
-    from .spaces.v0.space import v0
-    from .spaces.v1.space import v1
 
     server = Server()
-    server.add(v0)
-    server.add(v1)
 ```
 
-#### Spaces
+##### Mount URL
+
+In `yourapp/resources/urls.py` add the lines:
+
+``` python
+    from .server import server
+    urlpatterns = server.urlpatterns
+```
+
+In your `urls.py`, add the lines:
+
+``` python
+    urlpatterns += [
+        url(r'^resources', include('yourapp.resources.urls')
+    ]
+```
+
+At this point, you no longer need to configure any further URLs using Django.
+
+#### Adding spaces
 
 ##### V0
 
@@ -115,6 +123,16 @@ Create space "v0" referencing resource "clients" for storing client data:
     v0.add(clients)
 ```
 
+Modify `youapp/resources/server.py` to import and include "v0":
+
+``` python
+    ...
+    from .spaces.v0.space import v0
+
+    ...
+    server.add(v0)
+```
+
 ##### V1
 
 Create space "v1" referencing "users", a refactor of clients using the same underlying model:
@@ -130,7 +148,17 @@ Create `yourapp/resources/spaces/v1/space.py`:
     v1.add(users)
 ```
 
-#### Resources
+Modify `youapp/resources/server.py` to import and include "v1":
+
+``` python
+    ...
+    from .spaces.v1.space import v1
+
+    ...
+    server.add(v1)
+```
+
+#### Adding resources
 
 ##### Clients
 
@@ -292,19 +320,10 @@ Create `yourapp/spaces/v1/resources/groups.py`:
     )
 ```
 
-#### URLs
+#### Running the server
 
-In `yourapp/resources/urls.py` add the lines:
+Run the usual dev server command in a virtual environment using virtualenv/activate, pipenv, or poetry:
 
-``` python
-    from .server import server
-    urlpatterns = server.urlpatterns
-```
-
-In your `urls.py`, add the lines:
-
-``` python
-    urlpatterns += [
-        url(r'^resources', include('yourapp.resources.urls')
-    ]
+``` bash
+python manage.py runserver
 ```
