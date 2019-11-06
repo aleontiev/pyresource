@@ -180,26 +180,21 @@ Create `yourapp/resources/spaces/v1/resources/users.py`:
 
                 'source': 'role',           # the model source
                 'description': 'role'       # description
-                'type': "?number",          # type of the field
-                'unique': False,            # uniqueness groups
-                'index': ['role'],          # index groups
+                'type': "number",           # type of the field, including nullability
+                'unique': False,            # uniqueness groups or true for self-only
+                'index': ['role'],          # index groups or true for self-only
                 'primary': False,           # primary key (default: false)
                 'default': 2,               # default value
-                'options': [{               # possible values
-                    "id": 1,
-                    "option": "admin",
+                'options': [{
+                    "value": 1,
+                    "label": "normal",
+                }, {
+                    "value": 2,
+                    "label": "admin",
                     "can": {
-                        "=set": "is_staff",
-                        "get": True
-                    }                       # only staff users can set this field to this value
-                }], {
-                    "id": 2,
-                    "option": "normal",
-                    "can": {
-                        "set": True,
-                        "get": True
-                    }                       # everybody can set this field
-                }],
+                        "=set": "request.is_staff",
+                    }
+                },
 
                 # manual: lazy loading
 
@@ -215,8 +210,8 @@ Create `yourapp/resources/spaces/v1/resources/users.py`:
                 # the lambda takes the request and returns one of the simpler types
                 "can": {
                     'get': [{"is_staff": True}, {"is_superuser": True}]      # this field can be viewed by staff or superusers (default True)
-                    'set': lambda r: Q(id=r.user.pk) | Q(is_staff=False)     # this field can be set by the target user or if the target is not staff
-                    'edit': False,  # this field can be changed after creation (default True)
+                    'set.initial': lambda r: Q(id=r.user.pk) | Q(is_staff=False)     # this field can be initialized set by the target user or if the target is not staff
+                    'set': False,  # this field can not be changed after creation
                 }
             },
             'groups': 'groups',         # this will either have type "[@groups" (array of link to group)
@@ -228,14 +223,15 @@ Create `yourapp/resources/spaces/v1/resources/users.py`:
                 'setter': set_main_group   # write through a custom function
             },
         },
-        methods=[
+        can=[
+            'get',
             'delete',
             'add.resource'
         ], # default methods: get, set, edit, add, delete, inspect
         features={
-            'with': True
-            'where': True
-            'sort': True
+            'with': True,
+            'where': True,
+            'sort': True,
             'page': {
                 'max_size': 20
             },
@@ -249,19 +245,22 @@ Create `yourapp/resources/spaces/v1/resources/users.py`:
         },  # default features: where, with, sort, page, group, inspect, method
         access={
             'authenticated': {                  # for authenticated users
-                'get.record': {                          # allow GET /users/x/ 
-                    '=id': 'me'        # for x = current user ID
-                },
-                'get.field': {                           # allow GET /users/x/apps_*
-                    '=id': 'me',
-                    '=field.startswith': 'apps'
+                'get.record': [{                     # allow GET /users/x/ 
+                    '=id': 'me',                       # for x = current user ID
+                }, {
+                    '=record.email.not': 'record.username' # ... or any record where email != username
+                }],
+                'get.field': {                           # allow GET /users/x/*apps*
+                    '=record.id': 'me',                     # for the current user 
+                    'field.matches': '.*apps.*'             # and for any field containing "apps"
                 }
             },
             'is_staff': {                       # for staff users
-                'get': True,                      # allow  GET /users/ and /users/id/field/
-                'add': True,                      # allow  POST /users/
-                'set': True,                      # to PUT /users/*/
-                'edit': True,                     # to PATCH /users/*/
+                'get': True,                        # allow GET /users/ and /users/x/y/
+                'add': True,                        # allow POST /users/ and /users/x/y/
+                'set.record': True,                 # allow PUT /users/x/
+                'set.field': True,                  # allow PUT /users/x/y/
+                'edit': True,                       # to PATCH /users/*/
                 'delete.record': [{                      # to DELETE /users/x/
                     '=id': 'me',       # for x = current user
                 }, {
