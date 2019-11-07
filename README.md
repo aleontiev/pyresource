@@ -2,6 +2,29 @@
 
 **django-resource** is an implementation of [Resource](https://resource.rest) for Django.
 
+Contents:
+  * [Getting Started](#getting-started)
+     * [Using DJ](#using-dj)
+        * [Installation](#installation)
+        * [Adding spaces](#adding-spaces)
+        * [Adding resources](#adding-resources)
+        * [Running the server](#running-the-server)
+     * [Using pip, pipenv, or poetry](#using-pip-pipenv-or-poetry)
+        * [Installation](#installation-1)
+           * [Add to INSTALLED APPS](#add-to-installed-apps)
+           * [Add to settings](#add-to-settings)
+           * [Add core packages](#add-core-packages)
+           * [Add server](#add-server)
+           * [Mount URL](#mount-url)
+        * [Adding spaces](#adding-spaces-1)
+           * [V0](#v0)
+           * [V1](#v1)
+        * [Adding resources](#adding-resources-1)
+           * [Clients](#clients)
+           * [Users](#users)
+           * [Groups](#groups)
+        * [Running the server](#running-the-server-1)
+
 ## Getting Started
 
 ### Using DJ
@@ -21,11 +44,19 @@ The above command will run an initialization blueprint to automatically add the 
 - Create a `resources` package within your main package
 - Add a URL mount under `/resources` referencing the server
 
+New blueprints will become available to generate spaces and resources.
+
+#### Adding spaces
+
+Generate a space, passing in a name:
+
+``` bash
+dj generate django_resource.space --name=v0
+```
+
 #### Adding resources
 
-New blueprints will become available:
-
-Generate a resource from a given model:
+Generate a resource, passing in a space, name, and model
 
 ``` bash
     dj generate django_resource.resource --space=v0 --name=users --model=auth.User
