@@ -51,7 +51,7 @@ New blueprints will become available to generate spaces and resources.
 Generate a space, passing in a name:
 
 ``` bash
-dj generate django_resource.space --name=v0
+    dj generate django_resource.space --name=v0
 ```
 
 #### Adding resources
@@ -356,5 +356,5 @@ Create `yourapp/spaces/v1/resources/groups.py`:
 Run the usual dev server command in a virtual environment using virtualenv/activate, pipenv, or poetry:
 
 ``` bash
-python manage.py runserver
+    python manage.py runserver
 ```
