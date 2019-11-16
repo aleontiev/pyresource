@@ -27,8 +27,7 @@ class Space(Resource):
 
     def __init__(self, **kwargs):
         if kwargs.get('space', None) == '.':
-            # root space record uniquely uses itself
-            # as the space
+            # root space record uniquely references itself
             kwargs['space'] = self
         return super(Space, self).__init__(**kwargs)
 
@@ -40,8 +39,8 @@ class Space(Resource):
     def resources_by_name(self):
         return {r.name: r for r in self.resources}
 
-    def resolve(self, type, value):
-        container, child = get_container(type)
+    def resolve(self, T, value):
+        container, child = get_container(T)
         if container:
             if container == '{':
                 value = {k:self.resolve(child, v) for k,v in value.items()}
@@ -50,7 +49,9 @@ class Space(Resource):
             elif container == '?':
                 value = self.resolve(child, v)
         else:
-            link, name = get_link(type)
+            link, name = get_link(T)
+            if not link:
+                raise ValueError(f'Failed to resolve: {T} is not a link type')
             resource = self.resources_by_name[name]
             value = resource.get_record(value)
 

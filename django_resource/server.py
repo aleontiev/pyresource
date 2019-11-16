@@ -59,8 +59,9 @@ class Server(Resource):
                         'distinct',
                     ],
                 },
-                'sort': {
-                }
+                'sort': True,
+                'inspect': True,
+                'method': True
             }
         },
         'types': {
@@ -73,7 +74,7 @@ class Server(Resource):
     def root(self):
         from .resource import Resource
         from .space import Space
-        from .type import Type
+        from .types import Type
         from .field import Field
 
         return Space(
@@ -93,6 +94,18 @@ class Server(Resource):
     def setup(self):
         if not getattr(self, '_setup', False):
             self.spaces.add(self.root)
+            self.types.add([
+                Type(name='any'),
+                Type(name='null'),
+                Type(name='string'),
+                Type(name='number'),
+                Type(name='boolean'),
+                Type(name='type'),
+                Type(name='object', alias='{', contains="types"),
+                Type(name='option', alias='?', contains="types"),
+                Type(name='array', alias='[', contains="types"),
+                Type(name='link', alias='@', contains="resources")
+            ])
         self._setup = True
 
     @cached_property
