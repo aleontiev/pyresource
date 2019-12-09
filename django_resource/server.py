@@ -10,7 +10,7 @@ class Server(Resource):
         'description': 'server description',
         'space': '.'
     }
-    _fields = {
+    _schema = {
         'version': {
             'type': 'string',
             'default': version

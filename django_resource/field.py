@@ -1,33 +1,31 @@
-from dataclasses import dataclass
-from django.utils.functional import lazy
-from .typing import Type, validate, is_link, is_list
+from django.utils.functional import lazy, cached_property
+from .types import is_link, is_list, validate
 from .resource import Resource, is_resource
 
+
 class Field(Resource):
-    _meta = {
-        'name': 'fields',
-        'description': 'fields description',
-        'singleton': False,
-    }
-    _fields = {
-        'resource': {
-            'type': '@resource',
-            'inverse': 'fields'
-        },
-        'id': {
-            'type': 'string',
-            'default': lambda field: f'{field.resource.id}.{field.name}'
-            'primary': True
-        },
-        'name': {
-            'type': 'string'
-        },
-        'type': {
+    class Schema:
+        name = 'fields'
+        space = '.'
+        description = 'fields description',
+        singleton = False
+        fields = {
+            'resource': {
+                'type': '@resource',
+                'inverse': 'fields'
+            },
+            'id': {
+                'type': 'string',
+                'default': lambda self: f'{self.resource.id}.{self.name}',
+                'primary': True
+            },
+            'name': 'string',
             'type': 'type'
         }
-    }
 
-    def __post_init(self):
+    def __init__(self, *args, **kwargs):
+        super(Field, self).__init__(*args, **kwargs)
+
         self._is_link = is_link(self.type)
         self._is_list = is_list(self.type)
         self.set_value(
@@ -51,27 +49,23 @@ class Field(Resource):
         else:
             return self.value
 
-    def get_link(self, link):
+    def get_link(self, value):
         return self.space.resolve(
             self.type,
-            link
+            value
         )
 
+    def validate(self, type, value):
+        return validate(type, value)
+
     def set_value(self, value):
-        validate(self.type, value)
+        self.validate(self.type, value)
         if self._is_link:
-            if (
-                is_resource(value) or (
-                    isinstance(value, list) and
-                    any((is_resource(v) for v in value))
-                )
-            ):
-                # resource given -> resolve all links now to get IDs
-                # usually this will not require any premature fetching
-                # unless a mix of IDs and resources is given
-                link = self.get_link(value)
+            if is_resource(value, or_container=True):
+                # resource given -> get ID or IDs
+                link = value
                 value = [
-                    v.get_id() for v in link
+                    v.get_id() for v in value
                 ] if self._is_list else link.get_id()
 
                 self.value = value
