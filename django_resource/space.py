@@ -8,7 +8,6 @@ class Space(Resource):
         name = "spaces"
         description = "spaces description"
         space = "."
-        singleton = False
         can = ["read", "inspect"]
         fields = {
             "server": {"type": "@server", "inverse": "spaces"},
@@ -24,10 +23,6 @@ class Space(Resource):
             # root space record uniquely references itself
             kwargs["space"] = self
         return super(Space, self).__init__(**kwargs)
-
-    @classmethod
-    def get_urls(cls, self):
-        pass
 
     @cached_property
     def resources_by_name(self):

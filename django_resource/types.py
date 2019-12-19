@@ -3,54 +3,59 @@ from .exceptions import ValidationError
 
 
 class Type(Resource):
-    _resource = None
-    _schema = {
-    }
+    class Schema:
+        id = "types"
+        name = "types"
+        fields = {
+            "name": {"type": "string", "primary": True},
+            "base": {"type": "@types", "inverse": "children"},
+            "children": {"type": {"is": "array", "of": "@types"}, "inverse": "base"},
+            "container": {"type": "boolean", "default": False},
+        }
 
 
-CONTAINERS = {
-    '{',
-    '[',
-    '?'
-}
+arrays = {"array", "?array"}
+unions = {"union", "?union"}
 
 
 def is_list(T):
-    if T and isinstance(T, str):
-        return T.startswith('[') or T.startswith('?[')
-    elif isinstance(T, list):
-        return all([is_list(t) for t in T])
+    if isinstance(T, str):
+        return T in arrays
     elif isinstance(T, dict):
-        return all([is_list(t) for t in T.values()])
+        return T["is"] in arrays or (
+            T["is"] in unions and all([is_list(o) for o in T["of"]])
+        )
     return False
 
 
 def is_link(T):
-    if T and isinstance(T, str):
-        return '@' in T
-    elif isinstance(T, list):
-        return all([is_link(t) for t in T])
+    if isinstance(T, str):
+        return "@" in T
     elif isinstance(T, dict):
-        return all([is_link(t) for t in T.values()])
+        type_of = T.get("of")
+        return is_link(type_of) if type_of else None
     return False
 
 
 def get_link(T):
     link = is_link(T)
     if link:
-        return True, ''.join(T[T.index('@') + 1:])
+        return True, "".join(T[T.index("@") + 1 :])
     else:
         return None, None
 
 
 def get_container(T):
-    if T and isinstance(T, str):
-        if T[0] in CONTAINERS:
-            return T[0], T[1:]
+    if isinstance(T, str):
+        if T[0] == "?":
+            return "option", T[1:]
+    elif isinstance(T, dict):
+        type_is = T["is"]
+        type_of = T.get("of", None)
+        if type_is[0] == "?":
+            return "option", {"is": type_is[1:], "of": type_of}
         else:
-            return None, T
-    else:
-        return None, T
+            return T["is"], type_of
 
 
 def validate(type, value):
@@ -61,43 +66,41 @@ def validate(type, value):
     container, remainder = get_container(type)
     if container:
         expecting = None
-        label = None
-        if container == '[':
+        if container == "array":
             expecting = list
-            label = 'array'
-        elif container == '{':
+        elif container == "object":
             expecting = dict
-            label = 'object'
 
         if expecting and not isinstance(value, expecting):
-            raise ValidationError(f'expecting {label} but got: {value}')
+            raise ValidationError(f"expecting {container} but got: {value}")
 
         if remainder:
             # validate remainder
-            if container == '[':
+            if container == "array":
                 return all((validate(remainder, v) for v in value))
-            elif container == '{':
+            elif container == "object":
                 return all((validate(remainder, v) for v in value.items()))
-            elif container == '?':
+            elif container == "option":
                 return (value is None) or validate(remainder, value)
+            elif container == "union":
+                return any(validate(r, value) for r in remainder)
         else:
             return True
     else:
         # base validation
         expecting = None
-        if type == 'number':
+        if type == "number":
             expecting = (int, float)
-        elif type == 'string':
+        elif type == "string":
             expecting = str
-        elif type == 'any':
+        elif type == "any":
             expecting = None
-        elif type == 'boolean':
+        elif type == "boolean":
             expecting = bool
-        elif type.startswith('@'):
+        elif type.startswith("@"):
             expecting = None
 
         if expecting and not isinstance(value, expecting):
-            raise ValidationError(f'expecting {type} but got: {value}')
+            raise ValidationError(f"expecting {type} but got: {value}")
 
         return True
-

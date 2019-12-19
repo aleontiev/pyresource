@@ -1,93 +1,114 @@
 from .utils import cached_property
+from .expression import execute
 
 
 class Resource(object):
     class Schema:
-        id = 'resources'
-        name = 'resources'
-        description = 'resources description'
-        space = '.'
-        singleton = False
-        can = ['read', 'inspect']
+        id = "resources"
+        name = "resources"
+        description = "A complex API type that can be acted upon with methods"
+        space = "."
+        can = ["read", "inspect"]
         parameters = None
         base = None
         features = None
         fields = {
-            'id': {
-                'primary': True,
-                'type': 'string',
-                'description': 'Identifies the resource across all spaces',
-                'example': 'resource.id',
+            "id": {
+                "primary": True,
+                "type": "string",
+                "description": "Identifies the resource within the server",
+                "example": "resources",
             },
-            'name': 'string',
-            'singleton': 'boolean',
-            'description': 'string',
-            'space': {
-                'type': '@spaces',
+            "name": {
+                "type": "string",
+                "description": "Identifies the resource within its space",
+                "example": "resources",
             },
-            'fields': {
-                'type': {
-                    'is': 'array',
-                    'of': '@spaces',
+            "singleton": {
+                "type": "boolean",
+                "default": False,
+                "description": ("Whether or not the resource represents one record"),
+            },
+            "description": {
+                "type": "?string",
+                "description": "Explanation of the resource",
+            },
+            "space": {
+                "type": "@spaces",
+                "inverse": "resources",
+                "description": "The space containing the resource",
+            },
+            "fields": {
+                "type": {"is": "array", "of": "@spaces"},
+                "inverse": "resource",
+                "description": "The fields that make up the resource",
+            },
+            "can": {
+                "type": {
+                    "is": "?union",
+                    "of": [
+                        {"is": "array", "of": "string"},
+                        {
+                            "is": "object",
+                            "of": {"is": "union", "of": ["null", "boolean", "object"]},
+                        },
+                    ],
                 },
-                'inverse': 'resource',
-            },
-            'can': {
-                'type': {
-                    'is': 'union',
-                    'of': [{
-                        'is': 'array',
-                        'of': 'string'
-                    }, {
-                        'is': 'object',
-                        'of': {
-                            'is': 'union',
-                            'of': ['null', 'boolean', 'object']
-                        }
-                    }, 'null']
-                },
-                'example': {
-                    'get': True,
-                    'clone.record': {
-                        'location.name:not.in': ['USA', 'UK'],
-                    }
-                }
-            },
-            'parameters': {
-                'type': {
-                    'is': '?object',
-                    'of': {
-                        'is': 'object',
-                        'of': 'type'
-                    }
-                },
-                'example': {
-                    'clone.record': {
-                        'remap': {
-                            'is': 'object',
-                            'of': 'string'
-                        }
-                    }
+                "description": "An map from method name to access rule",
+                "example": {
+                    "get": True,
+                    "clone.record": {
+                        "": "x | y",
+                        "updated:gt:x:": "created",
+                        "location.name:not.in:y": ["USA", "UK"],
+                    },
                 },
             },
-            'base': '?@resources',
-            'features': '?object',
-            'on': '?object',
-            'abstract': {
-                'type': 'boolean',
-                'default': False
-            }
+            "parameters": {
+                "type": {"is": "?object", "of": {"is": "object", "of": "type"}},
+                "description": "An object of custom input keys",
+                "example": {
+                    "clone.record": {"remap": {"is": "object", "of": "string"}}
+                },
+            },
+            "base": {
+                "type": "?@resources",
+                "inverse": "children",
+                "description": "The parent resource",
+            },
+            "children": {
+                "type": {"is": "array", "of": "@resources"},
+                "inverse": "base",
+                "description": "All resources that extend this one",
+            },
+            "features": {
+                "type": "?object",
+                "description": "All features supported by this resource",
+                "example": {
+                    "page": {"max_size": 100},
+                    "with": True,
+                    "sort": True,
+                    "if": False,
+                },
+            },
+            "on": {
+                "type": "?object",
+                "description": "Map of event handlers",
+                "example": {
+                    "get.record": {"url": "https://webhooks.io/example/"},
+                    "add": {"increment": "creator.num_created"},
+                },
+            },
+            "abstract": {"type": "boolean", "default": False},
         }
+
     _fields = None
     _options = None
 
-    def __init__(
-        self,
-        **options
-    ):
+    def __init__(self, **options):
         # make sure there is a schema and a name
-        assert(getattr(self, 'Schema', None) is not None)
-        assert(self.Schema.name is not None)
+        assert getattr(self, "Schema", None) is not None
+        assert self.Schema.name is not None
 
         self._options = options
         self._fields = {}
@@ -109,11 +130,11 @@ class Resource(object):
         if key is None:
             return self
 
-        keys = [k for k in key.split('.') if k] if key else []
+        keys = [k for k in key.split(".") if k] if key else []
         value = self
         last = len(keys)
         if not last:
-            raise ValueError(f'{key} is not a valid field of {self.name}')
+            raise ValueError(f"{key} is not a valid field of {self.name}")
         for i, key in enumerate(keys):
             is_last = i == last
             if key:
@@ -133,7 +154,11 @@ class Resource(object):
             return self._options[key]
         else:
             if callable(default):
+                # callable that takes self
                 default = default(self)
+            elif isinstance(default, dict):
+                # expression that takes self
+                default, _ = execute(default, self)
             return default
 
     @classmethod
@@ -146,19 +171,13 @@ class Resource(object):
         fields = self.get_fields()
         if key not in self._fields:
             if key not in fields:
-                raise AttributeError(f'{key} is not a valid field')
+                raise AttributeError(f"{key} is not a valid field")
 
             schema = fields[key]
             if not isinstance(schema, dict):
                 # shorthand where type is given as the only argument
-                schema = {
-                    'type': schema
-                }
-            self._fields[key] = Field.make(
-                resource=self,
-                name=key,
-                **schema
-            )
+                schema = {"type": schema}
+            self._fields[key] = Field.make(resource=self, name=key, **schema)
         return self._fields[key]
 
     def get_record(self, key=None):
@@ -169,19 +188,19 @@ class Resource(object):
 
     @classmethod
     def as_record(cls):
-        name = cls.get_meta('name')
+        name = cls.get_meta("name")
         fields = cls.get_fields()
         return Resource(
-            fields=['{}.{}'.format(name, key) for key in fields.keys()],
-            **cls.get_meta()
+            fields=["{}.{}".format(name, key) for key in fields.keys()],
+            **cls.get_meta(),
         )
 
     @cached_property
     def _id_field(self):
         for name, field in self.get_fields().items():
-            if isinstance(field, dict) and field.get('primary', False):
+            if isinstance(field, dict) and field.get("primary", False):
                 return name
-        raise ValueError('Resource {self.name} has no primary key')
+        raise ValueError("Resource {self.name} has no primary key")
 
     def get_id(self):
         return getattr(self, self._id_field)
@@ -189,20 +208,15 @@ class Resource(object):
     @classmethod
     def get_meta(cls, key=None, default=None):
         if not key:
-            return cls._resource
-        return cls._resource.get(key, default=default)
+            return cls.Schema
+        return cls.Schema.get(key, default=default)
 
 
-def is_resource(x, or_container=False):
+def is_resolved(x):
     if isinstance(x, Resource):
         return True
-    if or_container:
-        if isinstance(x, list) and all((
-            isinstance(c, Resource) for c in x
-        )):
-            return True
-        if isinstance(x, dict) and all((
-            isinstance(c, Resource) for c in x.values()
-        )):
-            return True
+    if isinstance(x, list) and all((isinstance(c, Resource) for c in x)):
+        return True
+    if isinstance(x, dict) and all((isinstance(c, Resource) for c in x.values())):
+        return True
     return False
