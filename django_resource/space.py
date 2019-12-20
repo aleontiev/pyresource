@@ -5,16 +5,21 @@ from .utils import cached_property
 
 class Space(Resource):
     class Schema:
+        id = "spaces"
         name = "spaces"
         description = "spaces description"
         space = "."
         can = ["read", "inspect"]
         fields = {
             "server": {"type": "@server", "inverse": "spaces"},
-            "name": "string",
+            "name": {
+                "type": "string",
+                "primary": True
+            },
             "resources": {
                 "type": {"is": "array", "of": "@resources"},
                 "inverse": "space",
+                "default": []
             },
         }
 

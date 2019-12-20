@@ -5,6 +5,7 @@ from .version import version
 
 class Server(Resource):
     class Schema:
+        id = "server"
         name = "server"
         singleton = True
         space = "."
@@ -54,6 +55,10 @@ class Server(Resource):
             "types": {"type": {"is": "array", "of": "@types"}, "default": []},
         }
 
+    def __init__(self, *args, **kwargs):
+        super(Server, self).__init__(*args, **kwargs)
+        self._setup = False
+
     @cached_property
     def root(self):
         from .resource import Resource
@@ -66,23 +71,21 @@ class Server(Resource):
             name=".",
             server=self,
             resources=[
-                {
-                    Space.as_record(),
-                    Resource.as_record(),
-                    Type.as_record(),
-                    Field.as_record(),
-                    Type.as_record(),
-                    Server.as_record(),
-                }
+                Space.as_record(),
+                Resource.as_record(),
+                Type.as_record(),
+                Field.as_record(),
+                Type.as_record(),
+                Server.as_record(),
             ],
         )
 
     def setup(self):
         from .types import Type
 
-        if not getattr(self, "_setup", False):
-            self.spaces.add(self.root)
-            self.types.add(
+        if not self._setup:
+            self.add(self.root, 'spaces')
+            self.add(
                 [
                     Type(name="any"),
                     Type(name="null"),
@@ -97,7 +100,8 @@ class Server(Resource):
                     Type(name="object", container=True),
                     Type(name="option", container=True),
                     Type(name="array", container=True),
-                ]
+                ],
+                'types'
             )
         self._setup = True
 

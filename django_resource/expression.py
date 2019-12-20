@@ -24,7 +24,8 @@ def format_expression(expression, context):
     elif isinstance(expression, list):
         return [format_expression(v) for v in expression]
     else:
-        expression = re.sub(r"{{\s+.", "{{self.", expression)
+        expression = re.sub(r"{{\s*\.", "{{ self.", expression)
+        print(expression, context.name)
         return resolve_template(expression, {"self": context})
 
 
@@ -40,11 +41,12 @@ def execute(expression, context):
         return expression, False
 
     if isinstance(expression, dict):
-        num_keys = len(expression.keys())
+        keys = list(expression.keys())
+        num_keys = len(keys)
         if num_keys != 1:
             return expression, False
 
-        method = expression.keys()[0]
+        method = keys[0]
         args = expression[method]
         if method in methods:
             return methods[method](args, context), True

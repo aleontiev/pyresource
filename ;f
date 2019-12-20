@@ -103,8 +103,8 @@ class Resource(object):
         }
 
     def __str__(self):
-        id = self.get_id()
-        return f"({self.__class__.__name__}: {id})"
+        name = self.get_id()
+        return f'{self.__class__.__name__}: {name}'
 
     def __init__(self, **options):
         # make sure there is a schema and a name
@@ -114,13 +114,13 @@ class Resource(object):
         self._fields = {}
 
     def __getattr__(self, key):
-        if key.startswith("_"):
+        if key.startswith('_'):
             return self.__dict__.get(key, None)
 
         return self.get_field(key).get_value()
 
     def __setattr__(self, key, value):
-        if key.startswith("_"):
+        if key.startswith('_'):
             return super(Resource, self).__setattr__(key, value)
 
         field = self.get_field(key)
@@ -139,8 +139,7 @@ class Resource(object):
         value = self
         last = len(keys)
         if not last:
-            this = str(self)
-            raise ValueError(f"{key} is not a valid field of {this}")
+            raise ValueError(f"{key} is not a valid field of {self.name}")
         for i, key in enumerate(keys):
             is_last = i == last
             if key:
@@ -177,15 +176,19 @@ class Resource(object):
         fields = self.get_fields()
         if key not in self._fields:
             if key not in fields:
-                this = str(self)
-                raise AttributeError(f"{key} is not a valid field of {this}")
+                raise AttributeError(f"{key} is not a valid field of {self.name}")
 
             schema = fields[key]
             if not isinstance(schema, dict):
                 # shorthand where type is given as the only argument
                 schema = {"type": schema}
-            id = "{0}.{1}".format(self.get_meta("id"), key)
-            self._fields[key] = Field.make(resource=self, id=id, name=key, **schema)
+            id = '{0}.{1}'.format(self.get_meta('id'), key)
+            self._fields[key] = Field.make(
+                resource=self,
+                id=id,
+                name=key,
+                **schema
+            )
         return self._fields[key]
 
     def get_record(self, key=None):
@@ -199,11 +202,11 @@ class Resource(object):
         name = cls.get_meta("name")
         fields = cls.get_fields()
         options = as_dict(cls.get_meta())
-        options["fields"] = ["{}.{}".format(name, key) for key in fields.keys()]
+        options['fields'] = ["{}.{}".format(name, key) for key in fields.keys()]
         return Resource(**options)
 
     def get_id_field(self):
-        if getattr(self, "_id_field", None):
+        if getattr(self, '_id_field', None):
             return self._id_field
 
         for name, field in self.get_fields().items():
@@ -214,15 +217,12 @@ class Resource(object):
         raise ValueError(f"Resource {self.name} has no primary key")
 
     def get_id(self):
-        if self.get_meta("singleton"):
+        if self.get_meta('singleton'):
             # singleton ID = name
-            return self.get_meta("name")
+            return self.get_meta('name')
         id_field = self.get_id_field()
-        return (
-            getattr(self, id_field)
-            if id_field in self._fields
-            else self.get_option(id_field)
-        )
+        return getattr(self, id_field) if id_field in self._fields else self.get_option(id_field)
+    
 
     @classmethod
     def get_meta(cls, key=None, default=None):

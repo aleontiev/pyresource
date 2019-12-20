@@ -1,0 +1,2 @@
+class TypeValidationError(Exception):
+    pass

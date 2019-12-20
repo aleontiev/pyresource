@@ -1,5 +1,5 @@
 from .resource import Resource
-from .exceptions import ValidationError
+from .exceptions import TypeValidationError
 
 
 class Type(Resource):
@@ -49,6 +49,8 @@ def get_container(T):
     if isinstance(T, str):
         if T[0] == "?":
             return "option", T[1:]
+        else:
+            return None, None
     elif isinstance(T, dict):
         type_is = T["is"]
         type_of = T.get("of", None)
@@ -59,10 +61,6 @@ def get_container(T):
 
 
 def validate(type, value):
-    if isinstance(type, list):
-        return any((validate(t, value) for t in type))
-    if isinstance(type, dict):
-        return all((validate(t, value.get(k)) for k, t in type.items()))
     container, remainder = get_container(type)
     if container:
         expecting = None
@@ -72,7 +70,7 @@ def validate(type, value):
             expecting = dict
 
         if expecting and not isinstance(value, expecting):
-            raise ValidationError(f"expecting {container} but got: {value}")
+            raise TypeValidationError(f"expecting {container} but got: {value}")
 
         if remainder:
             # validate remainder
@@ -101,6 +99,6 @@ def validate(type, value):
             expecting = None
 
         if expecting and not isinstance(value, expecting):
-            raise ValidationError(f"expecting {type} but got: {value}")
+            raise TypeValidationError(f"expecting {type} but got: {value}")
 
         return True
