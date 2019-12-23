@@ -39,7 +39,7 @@ class Resource(object):
                 "description": "The space containing the resource",
             },
             "fields": {
-                "type": {"is": "array", "of": "@spaces"},
+                "type": {"is": "array", "of": "@fields"},
                 "inverse": "resource",
                 "description": "The fields that make up the resource",
             },
@@ -102,6 +102,9 @@ class Resource(object):
             "abstract": {"type": "boolean", "default": False},
         }
 
+    def __repr__(self):
+        return str(self)
+
     def __str__(self):
         id = self.get_id()
         return f"({self.__class__.__name__}: {id})"
@@ -110,6 +113,7 @@ class Resource(object):
         # make sure there is a schema and a name
         assert self.Schema.name is not None
 
+        self._setup = False
         self._options = options
         self._fields = {}
 
@@ -198,7 +202,7 @@ class Resource(object):
     def as_record(cls):
         name = cls.get_meta("name")
         fields = cls.get_fields()
-        options = as_dict(cls.get_meta())
+        options = cls.get_meta()
         options["fields"] = ["{}.{}".format(name, key) for key in fields.keys()]
         return Resource(**options)
 
@@ -227,7 +231,7 @@ class Resource(object):
     @classmethod
     def get_meta(cls, key=None, default=None):
         if not key:
-            return cls.Schema
+            return as_dict(cls.Schema)
         return getattr(cls.Schema, key, default)
 
 

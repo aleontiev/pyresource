@@ -23,7 +23,6 @@ class Field(Resource):
 
     def __init__(self, *args, **kwargs):
         super(Field, self).__init__(*args, **kwargs)
-        self._setup = False
         self.setup()
 
     def setup(self):
@@ -37,7 +36,6 @@ class Field(Resource):
             name = self.get_option('name')
             default = self.get_option('default')
             value = resource.get_option(name, default)
-            print(resource, 'set', name, 'to', value)
             self.set_value(value)
             self._setup = True
 
@@ -94,12 +92,7 @@ class Field(Resource):
         if not isinstance(value, list):
             value = [value]
 
-        try:
-            inverse = resource.inverse
-        except Exception:
-            inverse = self.inverse
-        import pdb
-        pdb.set_trace()
+        inverse = self.inverse
 
         for v in value:
             inverse_field = v.get_field(inverse)
