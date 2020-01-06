@@ -27,11 +27,23 @@ class Space(Resource):
         if kwargs.get("space", None) == ".":
             # root space record uniquely references itself
             kwargs["space"] = self
+        # records keyed by resource, for each of the resources in this space
+        # for example, the root space (Space: .) will have records
+        # ...for "spaces" (e.g. ".")
+        # ...for "resources" (e.g. "resources", "spaces")
+        # ...for "server" (e.g. "server")
+        # ...for "types" (e.g. "any", "integer", "object")
+        self._records = {}
         return super(Space, self).__init__(**kwargs)
 
-    @cached_property
-    def resources_by_name(self):
-        return {r.name: r for r in self.resources}
+    # e.g. "spaces" "."
+    def resolve_record(self, name, key):
+        if name not in self._records:
+            records = self._records[name] = {}
+            record = records.get(key, None)
+            if not record:
+                record = records[key] = 
+            return record
 
     def resolve(self, T, value):
         container, child = get_container(T)
@@ -46,7 +58,6 @@ class Space(Resource):
             link, name = get_link(T)
             if not link:
                 raise ValueError(f"Failed to resolve: {T} is not a link type")
-            resource = self.resources_by_name[name]
-            value = resource.get_record(value)
 
+            return self.resolve_record(name, value)
         return value

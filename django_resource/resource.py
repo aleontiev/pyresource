@@ -196,6 +196,8 @@ class Resource(object):
         if isinstance(key, Resource):
             # short-circuit and return key if already a resource
             return key
+        if key in self._data:
+            return self._data[key]
         return self._data.get(key)
 
     @classmethod

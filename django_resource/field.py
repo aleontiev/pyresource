@@ -4,6 +4,11 @@ from .resource import Resource, is_resolved
 from .exceptions import TypeValidationError
 
 
+def last_part(key, sep='.'):
+    parts = key.split(sep)
+    return parts[-1]
+
+
 class Field(Resource):
     class Schema:
         id = "fields"
@@ -54,7 +59,8 @@ class Field(Resource):
         if is_resolved(value):
             return value
 
-        return self.get_option('resource').space.resolve(self.type, value)
+        resource = self.get_option('resource')
+        return resource.space.resolve(self.type, value)
 
     def validate(self, type, value):
         try:
