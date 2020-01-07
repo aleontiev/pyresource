@@ -36,14 +36,59 @@ class Space(Resource):
         self._records = {}
         return super(Space, self).__init__(**kwargs)
 
+    def create(self, name, key):
+        from .server import Server
+        from .types import Type
+        from .field import Field
+
+        if self.name == '.':
+            if name == 'server':
+                return self.server
+            if name == 'spaces':
+                if key == self.name:
+                    return self
+                else:
+                    raise Exception(f'Invalid {name} key: {key}')
+            if name == 'resources':
+                if key == 'server':
+                    return Server.as_record(space=self)
+                if key == 'spaces':
+                    return Space.as_record(space=self)
+                if key == 'fields':
+                    return Field.as_record(space=self)
+                if key == 'types':
+                    return Type.as_record(space=self)
+                if key == 'resources':
+                    return Resource.as_record(space=self)
+                raise Exception(f'Invalid {name} key: {key}')
+            if name == 'types':
+                return Type.get_base_type(
+                    key,
+                    server=self.server
+                )
+            if name == 'fields':
+                parts = key.split('.')
+                resource_id = '.'.join(parts[0:-1])
+                field_name = parts[-1]
+                # todo: get field schema
+                return Field(
+                    id=key,
+                    parent=self,
+                    name=field_name,
+                    resource=resource_id,
+                )
+            raise Exception(f'Invalid resource: {name}')
+
     # e.g. "spaces" "."
-    def resolve_record(self, name, key):
-        if name not in self._records:
+    def resolve_one(self, name, key):
+        records = self._records.get(name)
+        if not records:
             records = self._records[name] = {}
-            record = records.get(key, None)
-            if not record:
-                record = records[key] = 
-            return record
+
+        record = records.get(key, None)
+        if not record:
+            record = records[key] = self.create(name, key)
+        return record
 
     def resolve(self, T, value):
         container, child = get_container(T)
@@ -59,5 +104,5 @@ class Space(Resource):
             if not link:
                 raise ValueError(f"Failed to resolve: {T} is not a link type")
 
-            return self.resolve_record(name, value)
+            return self.resolve_one(name, value)
         return value

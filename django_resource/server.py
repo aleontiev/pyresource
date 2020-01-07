@@ -12,7 +12,7 @@ class Server(Resource):
         description = "server description"
         fields = {
             "version": {"type": "string", "default": version},
-            "url": {"type": "string"},
+            "url": {"type": "string", "primary": True},
             "spaces": {
                 "type": {"is": "array", "of": "@spaces"},
                 "inverse": "server",
@@ -52,7 +52,11 @@ class Server(Resource):
                     "method": True,
                 },
             },
-            "types": {"type": {"is": "array", "of": "@types"}, "default": []},
+            "types": {
+                "type": {"is": "array", "of": "@types"},
+                "default": [],
+                "inverse": "server",
+            },
         }
 
     def __init__(self, *args, **kwargs):
@@ -61,47 +65,37 @@ class Server(Resource):
 
     @cached_property
     def root(self):
-        from .resource import Resource
         from .space import Space
-        from .types import Type
-        from .field import Field
 
         return Space(
             space=".",
             name=".",
             server=self,
-            resources=[
-                Space.as_record(),
-                Resource.as_record(),
-                Type.as_record(),
-                Field.as_record(),
-                Type.as_record(),
-                Server.as_record(),
-            ],
+            resources=["spaces", "resources", "types", "fields", "server"],
         )
 
     def setup(self):
         from .types import Type
 
         if not self._setup:
-            self.add(self.root, 'spaces')
+            self.add(self.root, "spaces")
             self.add(
                 [
-                    Type(name="any"),
-                    Type(name="null"),
-                    Type(name="string"),
-                    Type(name="number"),
-                    Type(name="boolean"),
-                    Type(name="type"),
-                    Type(name="link"),
-                    Type(name="union", container=True),
-                    Type(name="map", container=True),
-                    Type(name="tuple", container=True),
-                    Type(name="object", container=True),
-                    Type(name="option", container=True),
-                    Type(name="array", container=True),
+                    "any",
+                    "null",
+                    "string",
+                    "number",
+                    "boolean",
+                    "type",
+                    "link",
+                    "union",
+                    "map",
+                    "tuple",
+                    "object",
+                    "option",
+                    "array",
                 ],
-                'types'
+                "types",
             )
         self._setup = True
 

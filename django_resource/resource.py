@@ -188,24 +188,26 @@ class Resource(object):
             if not isinstance(schema, dict):
                 # shorthand where type is given as the only argument
                 schema = {"type": schema}
-            id = "{0}.{1}".format(self.get_meta("id"), key)
-            self._fields[key] = Field.make(resource=self, id=id, name=key, **schema)
+
+            resource_id = self.get_meta('id')
+            id = f"{resource_id}.{key}"
+            self._fields[key] = Field.make(
+                parent=self,
+                resource=resource_id,
+                id=id,
+                name=key,
+                **schema
+            )
         return self._fields[key]
 
-    def get_record(self, key=None):
-        if isinstance(key, Resource):
-            # short-circuit and return key if already a resource
-            return key
-        if key in self._data:
-            return self._data[key]
-        return self._data.get(key)
-
     @classmethod
-    def as_record(cls):
-        name = cls.get_meta("name")
+    def as_record(cls, **kwargs):
+        id = cls.get_meta("id")
         fields = cls.get_fields()
         options = cls.get_meta()
-        options["fields"] = ["{}.{}".format(name, key) for key in fields.keys()]
+        options["fields"] = ["{}.{}".format(id, key) for key in fields.keys()]
+        for key, value in kwargs.items():
+            options[key] = value
         return Resource(**options)
 
     def get_id_field(self):
@@ -220,9 +222,6 @@ class Resource(object):
         raise ValueError(f"Resource {self.name} has no primary key")
 
     def get_id(self):
-        if self.get_meta("singleton"):
-            # singleton ID = name
-            return self.get_meta("name")
         id_field = self.get_id_field()
         return (
             getattr(self, id_field)

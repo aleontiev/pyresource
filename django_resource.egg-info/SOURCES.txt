@@ -1,6 +1,7 @@
 README.md
 setup.py
 django_resource/__init__.py
+django_resource/exceptions.py
 django_resource/expression.py
 django_resource/field.py
 django_resource/resource.py
@@ -9,6 +10,7 @@ django_resource/space.py
 django_resource/store.py
 django_resource/types.py
 django_resource/utils.py
+django_resource/version.py
 django_resource.egg-info/PKG-INFO
 django_resource.egg-info/SOURCES.txt
 django_resource.egg-info/dependency_links.txt

@@ -6,16 +6,30 @@ class Type(Resource):
     class Schema:
         id = "types"
         name = "types"
+        space = "."
         fields = {
             "name": {"type": "string", "primary": True},
             "base": {"type": "@types", "inverse": "children"},
-            "children": {"type": {"is": "array", "of": "@types"}, "inverse": "base"},
+            "children": {
+                "type": {"is": "array", "of": "@types"},
+                "inverse": "base",
+                "default": [],
+            },
             "container": {"type": "boolean", "default": False},
+            "server": {"type": "@server", "inverse": "types"},
         }
+
+    @classmethod
+    def get_base_type(cls, name, server=None):
+        kwargs = {"name": name, "base": "any", "container": is_container(name)}
+        if server:
+            kwargs["server"] = server
+        return cls(**kwargs)
 
 
 arrays = {"array", "?array"}
 unions = {"union", "?union"}
+containers = {"union", "array", "map", "object", "option", "tuple"}
 
 
 def is_list(T):
@@ -26,6 +40,10 @@ def is_list(T):
             T["is"] in unions and all([is_list(o) for o in T["of"]])
         )
     return False
+
+
+def is_container(T):
+    return T in containers
 
 
 def is_link(T):
