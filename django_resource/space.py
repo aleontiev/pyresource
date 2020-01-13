@@ -98,6 +98,9 @@ class Space(Resource):
             elif container == "array":
                 value = [self.resolve(child, v) for v in value]
             elif container == "option":
+                if value is None:
+                    # resolve null values
+                    return None
                 value = self.resolve(child, value)
         else:
             link, name = get_link(T)

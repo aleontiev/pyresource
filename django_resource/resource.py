@@ -80,6 +80,7 @@ class Resource(object):
                 "type": {"is": "array", "of": "@resources"},
                 "inverse": "base",
                 "description": "All resources that extend this one",
+                "default": []
             },
             "features": {
                 "type": "?object",

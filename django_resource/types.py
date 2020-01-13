@@ -99,7 +99,15 @@ def validate(type, value):
             elif container == "option":
                 return (value is None) or validate(remainder, value)
             elif container == "union":
-                return any(validate(r, value) for r in remainder)
+                # some type validations may throw exceptions
+                # if any of them is valid
+                for r in remainder:
+                    try:
+                        validate(r, value)
+                    except TypeValidationError:
+                        continue
+                    return True
+                raise TypeValidationError(f"could not match {type} to {value}")
         else:
             return True
     else:
