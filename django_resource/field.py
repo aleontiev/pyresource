@@ -20,9 +20,25 @@ class Field(Resource):
                 "type": "string",
                 "primary": True,
             },
-            "resource": {"type": "@resources", "inverse": "fields"},
+            "resource": {
+                "type": "@resources",
+                "inverse": "fields"
+            },
+            "source": {
+                "type": "?string",
+            },
             "inverse": {'type': '?string'},
             "name": {"type": "string"},
+            "can": {
+                "type": "union",
+                "of": [{
+                    "type": "object",
+                    "of": "boolean"
+                }, {
+                    "type": "array",
+                    "of": "string"
+                }]
+            },
             "type": {"type": "type"},
         }
 

@@ -1,5 +1,6 @@
 from .expression import execute
-from .utils import as_dict
+from .utils import as_dict, cached_property
+from .store import Store
 
 
 class Resource(object):
@@ -45,8 +46,9 @@ class Resource(object):
             },
             "can": {
                 "type": {
-                    "is": "?union",
+                    "is": "union",
                     "of": [
+                        "null",
                         {"is": "array", "of": "string"},
                         {
                             "is": "object",
@@ -54,13 +56,19 @@ class Resource(object):
                         },
                     ],
                 },
-                "description": "An map from method name to access rule",
+                "description": "A map from method name to access rule",
                 "example": {
                     "get": True,
                     "clone.record": {
-                        "": "x | y",
-                        "updated:gt:x:": "created",
-                        "location.name:not.in:y": ["USA", "UK"],
+                        ".or": [{
+                            "updated": {
+                                "not.less.": "created"
+                            }
+                        }, {
+                            "location.name": {
+                                "not.in": ["USA", "UK"],
+                            }
+                        }]
                     },
                 },
             },
@@ -71,33 +79,44 @@ class Resource(object):
                     "clone.record": {"remap": {"is": "object", "of": "string"}}
                 },
             },
-            "base": {
-                "type": "?@resources",
+            "bases": {
+                "type": {"is": "array", "of": "?@resources"},
                 "inverse": "children",
                 "description": "The parent resource",
-            },
-            "children": {
-                "type": {"is": "array", "of": "@resources"},
-                "inverse": "base",
-                "description": "All resources that extend this one",
-                "default": []
             },
             "features": {
                 "type": "?object",
                 "description": "All features supported by this resource",
                 "example": {
-                    "page": {"max_size": 100},
+                    "page": {"max": 100},
                     "with": True,
                     "sort": True,
                     "if": False,
                 },
             },
-            "on": {
+            "before": {
                 "type": "?object",
-                "description": "Map of event handlers",
+                "description": "Map of pre-event handlers",
                 "example": {
-                    "get.record": {"url": "https://webhooks.io/example/"},
-                    "add": {"increment": "creator.num_created"},
+                    "delete": {
+                        ".check": {
+                            '.or': [{
+                                "can_delete": {
+                                    "equals": True
+                                }
+                            }, {
+                                ".request.is_superuser": True
+                            }]
+                        },
+                    }
+                },
+            },
+            "after": {
+                "type": "?object",
+                "description": "Map of post-event handlers",
+                "example": {
+                    "get.record": {".webhook": "https://webhooks.io/example/"},
+                    "add": {".increment": "creator.num_created"},
                 },
             },
             "abstract": {"type": "boolean", "default": False},
@@ -131,7 +150,7 @@ class Resource(object):
         field = self.get_field(key)
         field.set_value(value)
 
-    def _get(self, key):
+    def _get_property(self, key):
         """Get field at given key (supporting.nested.paths)
 
         Raises:
@@ -154,11 +173,11 @@ class Resource(object):
                     value = field.get_value()
         return field
 
-    def add(self, value, key=None, index=None):
-        return self._get(key).add_value(value, index=index)
+    def add(self, key, value, index=None):
+        return self._get_property(key).add_value(value, index=index)
 
-    def get(self, key=None):
-        return self._get(key).get_value(resolve=False, id=True)
+    def get_property(self, key=None):
+        return self._get_property(key).get_value(resolve=False, id=True)
 
     def get_option(self, key, default=None):
         if key in self._options:
@@ -171,6 +190,10 @@ class Resource(object):
                 # expression that takes self
                 default, _ = execute(default, self)
             return default
+
+    @cached_property
+    def data(self):
+        return Store(self)
 
     @classmethod
     def get_fields(cls):
@@ -187,8 +210,9 @@ class Resource(object):
 
             schema = fields[key]
             if not isinstance(schema, dict):
-                # shorthand where type is given as the only argument
-                schema = {"type": schema}
+                # shorthand where source field name is given as the only argument
+                # in this case, use the store (e.g. DjangoStore) to determine the schema
+                schema = self.data.get_schema_for(schema)
 
             resource_id = self.get_meta('id')
             id = f"{resource_id}.{key}"

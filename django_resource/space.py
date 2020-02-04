@@ -1,6 +1,5 @@
 from .resource import Resource
 from .types import get_container, get_link
-from .utils import cached_property
 
 
 class Space(Resource):
@@ -36,8 +35,7 @@ class Space(Resource):
         self._records = {}
         return super(Space, self).__init__(**kwargs)
 
-    def create(self, name, key):
-        from .server import Server
+    def resolve_record(self, name, key):
         from .types import Type
         from .field import Field
 
@@ -51,7 +49,7 @@ class Space(Resource):
                     raise Exception(f'Invalid {name} key: {key}')
             if name == 'resources':
                 if key == 'server':
-                    return Server.as_record(space=self)
+                    return self.server.as_record(space=self)
                 if key == 'spaces':
                     return Space.as_record(space=self)
                 if key == 'fields':
@@ -80,14 +78,14 @@ class Space(Resource):
             raise Exception(f'Invalid resource: {name}')
 
     # e.g. "spaces" "."
-    def resolve_one(self, name, key):
+    def resolve_link(self, name, key):
         records = self._records.get(name)
         if not records:
             records = self._records[name] = {}
 
         record = records.get(key, None)
         if not record:
-            record = records[key] = self.create(name, key)
+            record = records[key] = self.resolve_record(name, key)
         return record
 
     def resolve(self, T, value):
@@ -107,5 +105,5 @@ class Space(Resource):
             if not link:
                 raise ValueError(f"Failed to resolve: {T} is not a link type")
 
-            return self.resolve_one(name, value)
+            return self.resolve_link(name, value)
         return value

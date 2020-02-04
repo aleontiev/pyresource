@@ -8,5 +8,32 @@ def resolve_template(template, context):
     return template.render(context)
 
 
+def get(template, context):
+    if not template or not context:
+        return None
+    parts = template.split('.')
+    part = parts[0]
+    if isinstance(context, dict):
+        next_context = context.get(part, None)
+    else:
+        next_context = getattr(context, part, None)
+
+    if len(parts) == 1:
+        return next_context
+    else:
+        return get(parts[1:], next_context)
+
+
 def as_dict(obj):
     return {k: v for k, v in obj.__dict__.items() if not k.startswith('_')}
+
+
+def merge(source, dest):
+    for key, value in source.items():
+        if isinstance(value, dict):
+            node = dest.setdefault(key, {})
+            merge(value, node)
+        else:
+            dest[key] = value
+
+    return dest

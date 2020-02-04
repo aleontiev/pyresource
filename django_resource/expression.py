@@ -1,8 +1,8 @@
 import re
-from .utils import resolve_template
+from .utils import resolve, get
 
 
-def resolve(expression, context):
+def resolve_expression(expression, context):
     while isinstance(expression, dict):
         expression, resolved = execute(expression, context)
         if not resolved:
@@ -10,11 +10,19 @@ def resolve(expression, context):
     return expression
 
 
-def format_expression(expression, context):
+def get_expression(expression, context):
     if not expression:
         return expression
 
     expression = resolve(expression, context)
+    return get(expression, context)
+
+
+def format_expression(expression, context):
+    if not expression:
+        return expression
+
+    expression = resolve_expression(expression, context)
 
     if isinstance(expression, dict):
         return {
@@ -25,15 +33,18 @@ def format_expression(expression, context):
         return [format_expression(v) for v in expression]
     else:
         expression = re.sub(r"{{\s*\.", "{{ self.", expression)
-        print(expression, context.name)
-        return resolve_template(expression, {"self": context})
+        return resolve(expression, {"self": context})
 
 
 def value_expression(expression, context):
     return expression
 
 
-methods = {"format": format_expression, "value": value_expression}
+methods = {
+    "get": get_expression,
+    "format": format_expression,
+    "value": value_expression,
+}
 
 
 def execute(expression, context):
@@ -47,6 +58,8 @@ def execute(expression, context):
             return expression, False
 
         method = keys[0]
+        if method.startswith("."):
+            method = method[1:]
         args = expression[method]
         if method in methods:
             return methods[method](args, context), True
