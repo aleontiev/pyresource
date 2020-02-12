@@ -252,15 +252,18 @@ class Query(object):
             expression = 'and'
             operands = {}
             for i, where in enumerate(wheres):
-                key = operand = None
                 num_parts = len(where)
+                with_level = f'.{level}' if level else ''
+                with_remainder = '~' + '~'.join(where[:-1]) if num_parts > 1 else ''
+                original = f"where{with_level}{with_remainder}"
+                key = operand = None
                 if num_parts == 1:
                     # where=a and b
                     value = where[0]
                     if len(value) > 1:
                         value = ', '.join(value)
                         raise QueryValidationError(
-                            f'Invalid where key "{where}", multiple values provided'
+                            f'Invalid where key "{original}", multiple values provided'
                         )
                     value = value[0]
                     expression = value
@@ -290,16 +293,16 @@ class Query(object):
                     key = where[2]
                     if key in BOOLEAN_OPERATORS:
                         raise QueryValidationError(
-                            f'Invalid where key "{where}", using operator "{key}"'
+                            f'Invalid where key "{original}", using operator "{key}"'
                         )
                 else:
                     raise QueryValidationError(
-                        f'Invalid where key "{where}", too many segments'
+                        f'Invalid where key "{original}", too many segments'
                     )
                 if operand and key:
                     if key in operands:
                         raise QueryValidationError(
-                            f'Invalid where key "{where}", duplicate tags for "{key}"'
+                            f'Invalid where keys, duplicate tags for "{key}"'
                         )
                     operands[key] = operand
 

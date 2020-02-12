@@ -1,0 +1,10 @@
+*.pyc
+.env*
+.python-version
+.cache/
+staticfiles
+dist/
+build/
+media/
+*.egg-info
+.pytest_cache/
