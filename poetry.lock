@@ -286,6 +286,14 @@ six = "*"
 test = ["pytest", "mock"]
 
 [[package]]
+category = "main"
+description = "A library and command-line tool for working with Boolean expressions"
+name = "ttable"
+optional = false
+python-versions = "*"
+version = "0.6.3"
+
+[[package]]
 category = "dev"
 description = "Measures number of Terminal column cells of wide-character codes"
 name = "wcwidth"
@@ -306,7 +314,7 @@ docs = ["sphinx", "jaraco.packaging (>=3.2)", "rst.linker (>=1.9)"]
 testing = ["pathlib2", "contextlib2", "unittest2"]
 
 [metadata]
-content-hash = "d035035b6bae7d30c4394c6ea7430556eee36913b3e2c82ec5813cfde0d629cc"
+content-hash = "446f26517952b952be8429d9b65b93cf14b72bd7f7d02631a0c08e5442c593a4"
 python-versions = "^3.7"
 
 [metadata.files]
@@ -409,6 +417,19 @@ sqlparse = [
 traitlets = [
     {file = "traitlets-4.3.3-py2.py3-none-any.whl", hash = "sha256:70b4c6a1d9019d7b4f6846832288f86998aa3b9207c6821f3578a6a6a467fe44"},
     {file = "traitlets-4.3.3.tar.gz", hash = "sha256:d023ee369ddd2763310e4c3eae1ff649689440d4ae59d7485eb4cfbbe3e359f7"},
+]
+ttable = [
+    {file = "ttable-0.6.3-cp27-cp27m-win32.whl", hash = "sha256:d53470305d988a51df9a5509259ce5646ed29a5dfcbe95dc05f97da5cd77a0f7"},
+    {file = "ttable-0.6.3-cp27-cp27m-win_amd64.whl", hash = "sha256:36f205fd576ba3902708ec01836786a99b84c93688ff6a04eefe09301e332252"},
+    {file = "ttable-0.6.3-cp33-cp33m-win32.whl", hash = "sha256:adae38d3f2c3e3fecf6908ff542ae5a2619859cf63c04cb1ae7131f0020bdf0d"},
+    {file = "ttable-0.6.3-cp33-cp33m-win_amd64.whl", hash = "sha256:23c6f25f3130e698abad96636bd87ad1a80000732965e2f5649fe04f67ea9faf"},
+    {file = "ttable-0.6.3-cp34-cp34m-win32.whl", hash = "sha256:126cc6b27f1b54b2a77023df6eb934b2200f98084d1653a540acfe32dab5af94"},
+    {file = "ttable-0.6.3-cp34-cp34m-win_amd64.whl", hash = "sha256:16f83689dd95b4ee0bdc257582d9466ff7a69eab373b46ce349759eed9093eea"},
+    {file = "ttable-0.6.3-cp35-cp35m-win32.whl", hash = "sha256:f84ad26f4d9df708c6cba7bed4e0c0421edba46decb334305352741e08cf1dbe"},
+    {file = "ttable-0.6.3-cp35-cp35m-win_amd64.whl", hash = "sha256:798e1116aa12a1a957d6cd1d8ff90bde79253313bb5600ee155212e21c88f957"},
+    {file = "ttable-0.6.3-cp36-cp36m-win32.whl", hash = "sha256:acbffa3dad481700e3ad3897304fec91bb32b0172cd98f2c5a342ad7260ab76f"},
+    {file = "ttable-0.6.3-cp36-cp36m-win_amd64.whl", hash = "sha256:7d6110ff3840844ee111cf24bd8a712e342e7d5494b67aa0e119bc6202dca83c"},
+    {file = "ttable-0.6.3.tar.gz", hash = "sha256:44e05969e27ebdc8735f62dea4a2d597ab02cf3324498a15e184e5f15e3c0fba"},
 ]
 wcwidth = [
     {file = "wcwidth-0.1.7-py2.py3-none-any.whl", hash = "sha256:f4ebe71925af7b40a864553f761ed559b43544f8f71746c2d756c7fe788ade7c"},
