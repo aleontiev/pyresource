@@ -22,7 +22,7 @@ ROOT_FEATURES = {
 FEATURES = LEVELED_FEATURES | ROOT_FEATURES
 
 FEATURE_REGEX = re.compile('^[-A-Za-z0-9_]+')
-FIELD_SEPARATOR_REGEX = re.compile('[^A-Za-z0-9_-]')
+FIELD_SEPARATOR_REGEX = re.compile('[^*A-Za-z0-9_-]')
 
 
 def get_feature(key):
@@ -85,6 +85,6 @@ class NestedFeature(object):
         return NestedFeature(query=self.query, name=self.name, level=level)
 
     def __call__(self, *args, **kwargs):
-        args.insert(0, self.level)
+        args = [self.level] + list(args)
         # call back to query with arguments
-        getattr(self.query, "_{}".format(self.name))(*args, **kwargs)
+        return getattr(self.query, "_{}".format(self.name))(*args, **kwargs)

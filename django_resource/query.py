@@ -2,7 +2,7 @@ from collections import defaultdict
 from urllib.parse import parse_qs
 from .utils import merge as _merge
 from copy import deepcopy
-from .exceptions import QueryValidationError
+from .exceptions import QueryValidationError, QueryExecutionError
 from .features import (
     get_feature,
     get_feature_separator,
@@ -60,12 +60,13 @@ def coerce_query_values(values, singletons=True):
 
 class Query(object):
     # methods
-    def __init__(self, state=None):
+    def __init__(self, state=None, executor=None):
         """
         Arguments:
             state: internal query representation
         """
         self._state = state or {}
+        self.executor = executor
 
     def add(self, record=None, field=None):
         return self._call('add', record=record, field=field)
@@ -87,8 +88,12 @@ class Query(object):
 
     def execute(self, **kwargs):
         executor = self.executor
-        method = self._state.get('.method', 'get')
-        method = getattr(executor, method)
+        if not executor:
+            raise QueryExecutionError(f'Query cannot execute without executor')
+        method_name = self.state.get('.method', 'get')
+        method = getattr(self.executor, method_name, None)
+        if not method:
+            raise QueryValidationError(f'Invalid method {method_name}')
         return method(self, **kwargs)
 
     @property
@@ -225,10 +230,16 @@ class Query(object):
         if level:
             for part in level.split("."):
                 try:
-                    sub = sub[part]
+                    new_sub = sub[part]
                 except KeyError:
                     sub[part] = {}
                     sub = sub[part]
+                else:
+                    if isinstance(new_sub, bool):
+                        sub[part] = {}
+                        sub = sub[part]
+                    else:
+                        sub = new_sub
 
         for key, value in kwargs.items():
             if merge and isinstance(value, dict) and sub.get(key):
@@ -271,7 +282,7 @@ class Query(object):
                     # where~name=Joe
                     # -> {"name": "Joe"}
                     operand = {
-                        where[0]: coerce_query_values(where[1])
+                        where[0]: coerce_query_values(where[1], singletons=False)
                     }
                     key = str(i)
                 elif num_parts == 3:
@@ -279,7 +290,7 @@ class Query(object):
                     # -> {"name": {"equals": "Joe"}}
                     operand = {
                         where[0]: {
-                            where[1]: coerce_query_values(where[2])
+                            where[1]: coerce_query_values(where[2], singletons=False)
                         }
                     }
                     key = str(i)
@@ -287,7 +298,7 @@ class Query(object):
                     # where~name~equals~tag=Joe
                     operand = {
                         where[0]: {
-                            where[1]: coerce_query_values(where[3])
+                            where[1]: coerce_query_values(where[3], singletons=False)
                         }
                     }
                     key = where[2]
@@ -332,7 +343,9 @@ class Query(object):
     def _build_update(cls, parts, key, value):
         update = {}
         num_parts = len(parts)
-        if num_parts:
+        if not key:
+            update = value
+        elif num_parts:
             update[key] = {}
             current = update[key]
             for i, part in enumerate(parts):
@@ -340,13 +353,14 @@ class Query(object):
                     current = current[part] = {}
                 else:
                     current[part] = value
+
         else:
             update[key] = value
         return update
 
     @classmethod
-    def from_querystring(cls, space, resource, value):
-        result = cls({'.space': space, '.resource': resource})
+    def from_querystring(cls, value, **kwargs):
+        result = cls(**kwargs)
         query = parse_qs(value)
         where = defaultdict(list)  # level -> [args]
         for key, value in query.items():
@@ -373,14 +387,15 @@ class Query(object):
                 continue
 
             # coerce value based on feature type
+            update_key = f".{feature}"
             if feature == SHOW:
                 value = get_show_fields(value)
+                update_key = None
             elif feature == SORT:
                 value = get_sort_fields(value)
             else:
                 value = coerce_query_values(value)
 
-            update_key = f".{feature}"
             update = cls._build_update(parts, update_key, value)
             result._update(
                 update,

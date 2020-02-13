@@ -63,14 +63,36 @@ class Executor(object):
         pass
 
 
-class Store(Query):
+class DjangoExecutor(Executor):
+    pass
+
+
+class Store(object):
     def __init__(self, resource):
         self.resource = resource
         self.resolver = self.get_resolver(resource)
-        super(Store, self).__init__({
-            ".resource": resource.name,
-            ".space": resource.space.name
-        })
+        self.executor = self.get_executor(resource)
+
+    def get_executor(self, resource):
+        return DjangoExecutor(resource)
+
+    def get_query(self, querystring=None):
+        initial = {
+            ".resource": self.resource.name,
+            ".space": self.resource.space.name
+        }
+        executor = self.executor
+        if querystring:
+            return Query.from_querystring(
+                querystring,
+                state=initial,
+                executor=executor
+            )
+        else:
+            return Query(
+                state=initial,
+                executor=executor
+            )
 
     def get_resolver(self, resource):
         return DjangoSchemaResolver(resource)

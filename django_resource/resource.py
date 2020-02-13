@@ -89,9 +89,9 @@ class Resource(object):
                 "description": "All features supported by this resource",
                 "example": {
                     "page": {"max": 100},
-                    "with": True,
+                    "show": True,
                     "sort": True,
-                    "if": False,
+                    "where": False,
                 },
             },
             "before": {
@@ -99,13 +99,13 @@ class Resource(object):
                 "description": "Map of pre-event handlers",
                 "example": {
                     "delete": {
-                        ".check": {
+                        "verify": {
                             '.or': [{
-                                "can_delete": {
-                                    "equals": True
+                                ".session.user": {
+                                    ".equals": "owner"
                                 }
                             }, {
-                                ".request.is_superuser": True
+                                ".session.roles": {'contains': 'superuser'}
                             }]
                         },
                     }
@@ -115,8 +115,8 @@ class Resource(object):
                 "type": "?object",
                 "description": "Map of post-event handlers",
                 "example": {
-                    "get.record": {".webhook": "https://webhooks.io/example/"},
-                    "add": {".increment": "creator.num_created"},
+                    "get.record": {"webhook": "https://webhooks.io/example/"},
+                    "add": {"increment": "creator.num_created"},
                 },
             },
             "abstract": {"type": "boolean", "default": False},

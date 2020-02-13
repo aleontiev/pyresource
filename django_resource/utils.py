@@ -34,6 +34,9 @@ def merge(source, dest):
             node = dest.setdefault(key, {})
             merge(value, node)
         else:
-            dest[key] = value
+            curr = dest.get(key)
+            if not isinstance(curr, dict) or not isinstance(value, bool):
+                dest[key] = value
+            # else: merge a boolean and dict together as the dict
 
     return dest
