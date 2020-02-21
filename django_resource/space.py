@@ -11,6 +11,16 @@ class Space(Resource):
         can = ["read", "inspect"]
         fields = {
             "server": {"type": "@server", "inverse": "spaces"},
+            "url": {
+                "type": "string",
+                "source": {
+                    "join": {
+                        "separator": "/",
+                        "targets": ["server.url", "name"]
+                    }
+                },
+                "can": {"set": False}
+            },
             "name": {
                 "type": "string",
                 "primary": True
@@ -107,3 +117,9 @@ class Space(Resource):
 
             return self.resolve_link(name, value)
         return value
+
+    def get_urlpatterns(self):
+        patterns = []
+        for resource in self.resources:
+            patterns.extend(resource.get_urlpatterns())
+        return patterns

@@ -76,6 +76,10 @@ class Store(object):
     def get_executor(self, resource):
         return DjangoExecutor(resource)
 
+    @property
+    def query(self):
+        return self.get_query()
+
     def get_query(self, querystring=None):
         initial = {
             ".resource": self.resource.name,

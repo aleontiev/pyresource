@@ -7,9 +7,9 @@ class Resource(object):
     class Schema:
         id = "resources"
         name = "resources"
-        description = "A complex API type that can be acted upon with methods"
+        description = "A complex API type composed of many fields"
         space = "."
-        can = ["read", "inspect"]
+        can = {"get": True, "inspect": True}
         parameters = None
         base = None
         features = None
@@ -19,6 +19,16 @@ class Resource(object):
                 "type": "string",
                 "description": "Identifies the resource within the server",
                 "example": "resources",
+            },
+            "url": {
+                "type": "string",
+                "source": {
+                    "join": {
+                        "separator": "/",
+                        "targets": ["space.url", "name"]
+                    }
+                },
+                "can": {"set": False}
             },
             "name": {
                 "type": "string",
@@ -101,11 +111,11 @@ class Resource(object):
                     "delete": {
                         "verify": {
                             '.or': [{
-                                ".session.user": {
+                                ".request.user.id": {
                                     ".equals": "owner"
                                 }
                             }, {
-                                ".session.roles": {'contains': 'superuser'}
+                                ".request.user.roles": {'contains': 'superuser'}
                             }]
                         },
                     }
@@ -259,6 +269,13 @@ class Resource(object):
         if not key:
             return as_dict(cls.Schema)
         return getattr(cls.Schema, key, default)
+
+    def get_urlpatterns(self):
+        """Get Django urlpatterns for this resource"""
+        base = f'{self.space.server.url}/{self.space.name}/{self.name}'
+        patterns = [base]
+        for field in self.get_fields().keys():
+            patterns.append(f'{base}/{field}')
 
 
 def is_resolved(x):

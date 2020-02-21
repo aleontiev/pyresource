@@ -249,7 +249,7 @@ Response:
         },
         "users": {
             "1": {"name": "Jo"}
-            "2": {} 
+            "2": {}
         },
         "tags.subtags": {
             "1": ["21"],
@@ -291,8 +291,6 @@ Response:
         )
 
     def setup(self):
-        from .types import Type
-
         if not self._setup:
             self.add("spaces", self.root)
             self.add("types", [
