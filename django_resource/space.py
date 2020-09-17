@@ -1,5 +1,5 @@
 from .resource import Resource
-from .types import get_container, get_link
+from .types import get_link, get_type_name, get_type_names
 
 
 class Space(Resource):
@@ -10,13 +10,16 @@ class Space(Resource):
         space = "."
         can = ["read", "inspect"]
         fields = {
-            "server": {"type": "@server", "inverse": "spaces"},
+            "server": {
+                "type": "@server",
+                "inverse": "spaces"
+            },
             "url": {
                 "type": "string",
                 "source": {
                     "join": {
                         "separator": "/",
-                        "targets": ["server.url", "name"]
+                        "values": ["server.url", "name"]
                     }
                 },
                 "can": {"set": False}
@@ -26,7 +29,10 @@ class Space(Resource):
                 "primary": True
             },
             "resources": {
-                "type": {"is": "array", "of": "@resources"},
+                "type": {
+                    "type": "array",
+                    "items": "@resources"
+                },
                 "inverse": "space",
                 "default": []
             },
@@ -99,23 +105,28 @@ class Space(Resource):
         return record
 
     def resolve(self, T, value):
-        container, child = get_container(T)
-        if container:
-            if container == "object":
+        name = get_type_name(T)
+        names = get_type_names(T)
+        if name:
+            if name == 'object':
+                child = get_type_property(T, 'additionalProperties')
+
                 value = {k: self.resolve(child, v) for k, v in value.items()}
-            elif container == "array":
+            elif name == 'array':
+
                 value = [self.resolve(child, v) for v in value]
-            elif container == "option":
+            elif name == "link":
+                link = get_link(T)
+                if not link:
+                    raise ValueError(f"Failed to resolve: {T} not of link type")
+                return self.resolve_link(link, value)
+        if names:
+            if len(names) == 2 and "null" in names:
+                value = next(iter(set(names) - {"null"}))
                 if value is None:
-                    # resolve null values
                     return None
                 value = self.resolve(child, value)
-        else:
-            link, name = get_link(T)
-            if not link:
-                raise ValueError(f"Failed to resolve: {T} is not a link type")
-
-            return self.resolve_link(name, value)
+            # TODO: support resolving more complex types
         return value
 
     def get_urlpatterns(self):

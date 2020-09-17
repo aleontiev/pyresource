@@ -12,31 +12,49 @@ class Server(Resource):
         space = "."
         description = "server description"
         fields = {
-            "version": {"type": "string", "default": version},
-            "url": {"type": "string", "primary": True},
+            "version": {
+                "type": "string",
+                "default": version
+            },
+            "url": {
+                "type": "string",
+                "primary": True
+            },
             "spaces": {
-                "type": {"is": "array", "of": "@spaces"},
+                "type": {
+                    "type": "array",
+                    "items": "@spaces"
+                },
                 "inverse": "server",
                 "default": [],
             },
             "features": {
                 "type": {
-                    "is": "union",
-                    "of": [{"is": "array", "of": "string"}, "object"],
+                    "anyOf": [
+                        {
+                            "type": "object"
+                        },
+                        {
+                            "type": "array",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    ]
                 },
                 "default": {
                     "with": {"max_depth": 5},
                     "where": {
                         "max_depth": 3,
                         "operators": [
-                            "equals",  # =
-                            "not",  # !=
+                            "=",  # =
+                            "!=",
+                            "<",
+                            "<=",
+                            ">=",
+                            ">",
                             "in",  # contains
                             "not.in",  # does not contain
-                            "less"  # <
-                            "not.more",  # <=
-                            "not.less",  # >=
-                            "more",  # >
                             "range",
                             "null",
                             "not.null",
@@ -56,7 +74,10 @@ class Server(Resource):
                 },
             },
             "types": {
-                "type": {"is": "array", "of": "@types"},
+                "type": {
+                    "type": "array",
+                    "items": "@types"
+                },
                 "default": [],
                 "inverse": "server",
             },
@@ -169,7 +190,7 @@ Query:
     "record": null,
     "field": null,
     "query": {
-        ".group": {
+        "group": {
             "most_recent_tag": {
                 "max": "created"
             },
@@ -177,36 +198,45 @@ Query:
                 "count": "items.id"
             }
         },
-        ".where": {
-             "name": {
-                "in": ["level", "emotional"]
+        "where": {
+             "in": [
+                'name',
+                ["'level'", "'emotional'"]
             }
         },
-        ".sort": ["tag"],
-        "tag": True,
-        "subtags": {
-            ".where": {
-                ".or": [{
-                    "tag": {"like": "test"},
-                }, {
-                    ".not": {
-                        "tag": {
-                            "equals$": "parent.tag"
-                        }
-                    }
-                }]
-            },
+        "sort": ["tag"],
+        "fields": {
             "tag": True,
             "subtags": {
-                "tag": True
+                "where": {
+                    "or": [{
+                        "like": ['tag', '"test"']
+                    }, {
+                        "not": {
+                            "=": [
+                                "tag", "parent.tag"
+                            ]
+                        }
+                    }]
+                },
+                "fields": {
+                    "tag": True,
+                    "subtags": {
+                        "tag": True
+                    }
+                }
             },
-        },
-        "items": {
-            "body": True
-        },
-        "creator": {
-            "*": True,
-            "email": False
+            "items": {
+                "fields": {
+                    "body": True
+                }
+            },
+            "creator": {
+                "fields": {
+                    "*": True,
+                    "email": False
+                }
+            }
         }
     },
 }

@@ -25,30 +25,28 @@ class Field(Resource):
                 "inverse": "fields"
             },
             "source": {
-                "type": {
-                    "is": "union",
-                    "of": [
-                        "null",
-                        "string",
-                        "object"
-                    ]
-                }
+                "type": ["null", "string", "object"]
             },
-            "inverse": {'type': '?string'},
+            "inverse": {
+                'type': ["null", "string"]
+            },
             "name": {"type": "string"},
             "can": {
-                "type": {
-                    "is": "union",
-                    "of": [{
-                        "type": "object",
-                        "of": "boolean"
-                    }, {
-                        "type": "array",
-                        "of": "string"
-                    }]
-                }
+                "type": [{
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "boolean"
+                    }
+                }, {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }]
             },
-            "type": {"type": "type"},
+            "type": {
+                "type": "type"
+            },
         }
 
     def __init__(self, *args, **kwargs):

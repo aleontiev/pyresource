@@ -6,11 +6,11 @@ from .exceptions import QueryValidationError, QueryExecutionError
 from .features import (
     get_feature,
     get_feature_separator,
-    get_show_fields,
+    get_take_fields,
     get_sort_fields,
     NestedFeature,
     WHERE,
-    SHOW,
+    TAKE,
     SORT,
 )
 from .boolean import (
@@ -90,7 +90,7 @@ class Query(object):
         executor = self.executor
         if not executor:
             raise QueryExecutionError(f'Query cannot execute without executor')
-        method_name = self.state.get('.method', 'get')
+        method_name = self.state.get('method', 'get')
         method = getattr(self.executor, method_name, None)
         if not method:
             raise QueryValidationError(f'Invalid method {method_name}')
@@ -103,20 +103,20 @@ class Query(object):
     # features
 
     def body(self, body):
-        return self._update({".body": body})
+        return self._update({"body": body})
 
     def record(self, name):
-        return self._update({".record": name})
+        return self._update({"record": name})
 
     def field(self, name):
-        return self._update({".field": name})
+        return self._update({"field": name})
 
     def method(self, name):
-        return self._update({".method": name})
+        return self._update({"method": name})
 
     @property
-    def show(self):
-        return NestedFeature(self, "show")
+    def take(self):
+        return NestedFeature(self, "take")
 
     @property
     def where(self):
@@ -138,7 +138,7 @@ class Query(object):
         if args:
             kwargs = args
 
-        return self._update({".inspect": kwargs}, copy=copy, merge=True)
+        return self._update({"inspect": kwargs}, copy=copy, merge=True)
 
     def page(self, args=None, copy=True, **kwargs):
         """
@@ -148,9 +148,9 @@ class Query(object):
         if args:
             kwargs = args
 
-        return self._update({".page": kwargs}, copy=copy, merge=True)
+        return self._update({"page": kwargs}, copy=copy, merge=True)
 
-    def _show(self, level, *args, copy=True):
+    def _take(self, level, *args, copy=True):
         kwargs = {}
         for arg in args:
             show = True
@@ -158,10 +158,10 @@ class Query(object):
                 arg = arg[1:]
                 show = False
             kwargs[arg] = show
-        return self._update(kwargs, copy=copy, level=level, merge=True)
+        return self._update({'take': kwargs}, copy=copy, level=level, merge=True)
 
     def _call(self, method, record=None, field=None):
-        if self.state.get('.method') != method:
+        if self.state.get('method') != method:
             return getattr(self.method(method), method)(
                 record=record, field=field
             )
@@ -170,9 +170,9 @@ class Query(object):
             # redirect back through copy
             args = {}
             if record:
-                args['.record'] = record
+                args['record'] = record
             if field:
-                args['.field'] = field
+                args['field'] = field
             return getattr(self._update(args), method)()
 
         return self.execute()
@@ -181,20 +181,20 @@ class Query(object):
         """
         Example:
             .where({
-                '.or': [
-                    {'users.location.name': {'contains': 'New York'}},
-                    {'.not': {'users.in': [1, 2]}}
+                'or': [
+                    {'contains': ['users.location.name', '"New York"']},
+                    {'not': {'in': ['users', [1, 2]]}}
                 ]
             })
         """
-        return self._update({".where": query}, copy=copy, level=level)
+        return self._update({"where": query}, copy=copy, level=level)
 
     def _sort(self, level, *args, copy=True):
         """
         Example:
             .sort("name", "-created")
         """
-        return self._update({".sort": args}, copy=copy, level=level)
+        return self._update({"sort": args}, copy=copy, level=level)
 
     def _group(self, level, args=None, copy=True, **kwargs):
         """
@@ -205,7 +205,7 @@ class Query(object):
             kwargs = args
 
         return self._update(
-            {".group": kwargs},
+            {"group": kwargs},
             copy=copy,
             level=level,
             merge=True
@@ -227,17 +227,22 @@ class Query(object):
         sub = state
         # adjust substate at particular level
         # default: adjust root level
+        take = 'take'
         if level:
             for part in level.split("."):
+                if take not in sub:
+                    sub[take] = {}
+
+                fields = sub[take]
                 try:
-                    new_sub = sub[part]
+                    new_sub = fields[part]
                 except KeyError:
-                    sub[part] = {}
-                    sub = sub[part]
+                    fields[part] = {}
+                    sub = fields[part]
                 else:
                     if isinstance(new_sub, bool):
-                        sub[part] = {}
-                        sub = sub[part]
+                        fields[part] = {}
+                        sub = fields[part]
                     else:
                         sub = new_sub
 
@@ -265,7 +270,8 @@ class Query(object):
             for i, where in enumerate(wheres):
                 num_parts = len(where)
                 with_level = f'.{level}' if level else ''
-                with_remainder = '~' + '~'.join(where[:-1]) if num_parts > 1 else ''
+                separator = ':'
+                with_remainder = separator + separator.join(where[:-1]) if num_parts > 1 else ''
                 original = f"where{with_level}{with_remainder}"
                 key = operand = None
                 if num_parts == 1:
@@ -279,27 +285,25 @@ class Query(object):
                     value = value[0]
                     expression = value
                 elif num_parts == 2:
-                    # where~name=Joe
+                    # where:name=Joe
                     # -> {"name": "Joe"}
                     operand = {
-                        where[0]: coerce_query_values(where[1], singletons=False)
+                        '=': [where[0], coerce_query_values(where[1], singletons=False)]
                     }
                     key = str(i)
                 elif num_parts == 3:
-                    # where~name~equals=Joe
-                    # -> {"name": {"equals": "Joe"}}
+                    # where:name:equals=Joe
+                    # -> {"equals": ["name", "Joe"]}}
                     operand = {
-                        where[0]: {
-                            where[1]: coerce_query_values(where[2], singletons=False)
-                        }
+                        where[1]: [where[0], coerce_query_values(where[2], singletons=False)]
                     }
                     key = str(i)
                 elif num_parts == 4:
-                    # where~name~equals~tag=Joe
+                    # where:name:equals:tag=Joe
                     operand = {
-                        where[0]: {
-                            where[1]: coerce_query_values(where[3], singletons=False)
-                        }
+                        where[1]: [
+                            where[0], coerce_query_values(where[3], singletons=False)
+                        ]
                     }
                     key = where[2]
                     if key in BOOLEAN_OPERATORS:
@@ -328,10 +332,9 @@ class Query(object):
                     update = values
                 else:
                     # many conditions
-                    update_key = f".{expression}"
-                    update = {update_key: values}
+                    update = {expression: values}
 
-            update = {'.where': update}
+            update = {'where': update}
             query._update(
                 update,
                 level=level,
@@ -386,11 +389,10 @@ class Query(object):
                 where[level].append(parts)
                 continue
 
-            # coerce value based on feature type
-            update_key = f".{feature}"
-            if feature == SHOW:
-                value = get_show_fields(value)
-                update_key = None
+            # coerce value based on feature name
+            update_key = feature
+            if feature == TAKE:
+                value = get_take_fields(value)
             elif feature == SORT:
                 value = get_sort_fields(value)
             else:

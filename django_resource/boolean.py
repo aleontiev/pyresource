@@ -20,7 +20,7 @@ def build_expression(expression, mapping):
             example: {"a": 1, "b": 2, "c": 3}
     Returns:
         example:
-            {".or": [3, {".and": [1, 2]}]}
+            {"or": [3, {"and": [1, 2]}]}
     """
     expression = BooleanExpression(expression)
     symbols = expression.symbols
@@ -45,7 +45,7 @@ def _build_expression(expression, mapping):
 
     operator = getattr(tree, 'operator', None)
     if operator:
-        key = f'.{symbol}'
+        key = symbol
         if symbol in UNARY_OPERATORS:
             return {
                 key: _build_expression(tree.l_child, mapping)

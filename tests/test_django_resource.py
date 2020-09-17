@@ -18,28 +18,71 @@ class IntegrationTestCase(django.T
         # - users (auth.user)
         # - groups (auth.group)
         # - posts (custom model with a creator and a group)
-        # one singletons: session (for authentication)
+        # one singleton:
+        # - session (for authentication)
 
         # 1. login
         # Request:
-        #     POST /api/test/session?take.user=name,email {"username": "test", "password": "test"}
+        #     POST /api/test/session?take.user=id,name,email {"username": "test", "password": "test"}
         # Success:
-        #     201 {"data": {"users": {"1234": {"name": "Joe Smith", "email": "joe@smith.com"}}, "session": {"user": "1234"}}}
+        #     201 {
+        #       "key": ["session"],
+        #       "data": {
+        #           "users": [
+        #               [1234, "Joe Smith", "joe@smith.com"]
+        #           },
+        #           "session": [1234]
+        #       },
+        #       "head": {
+        #           "users": ["id", "name", "email"],
+        #           "session": ["user"]
+        #       }
+        #     }
         # Failure:
-        #     403 {"errors": {"response": {"session": {"password": "invalid password provided"}}}}
-        #     400 {"errors": {"request": {"take.user": {"name": "invalid field"}}}}
+        #     403 {
+        #       "errors": {
+        #           "body": {
+        #               "password": "invalid password provided"
+        #           }
+        #       }
+        #     }
+        #     400 {
+        #       "errors": {
+        #           "query": {
+        #               "take.user": {"name": "invalid field"}
+        #           }
+        #       }
+        #     }
 
         # 2a. view profile
         # Request:
-        #     GET /api/test/session/user/?take=name
+        #     GET /api/test/session/user/?take=id,name
         # Success:
-        #     200 {"data": {"session": {"user": "1234"}, {"users": {"1234": {"name": "John"}}}}}
+        #     200 {
+        #       "key": ["users", 0],
+        #       "data": {
+        #           "users": [[1234, "John"]]
+        #       },
+        #       "head": {
+        #           "users": ["id", "name"]
+        #       }
+        #     }
 
         # 2b. change name
         # Request:
         #     PATCH /api/test/users/1234 {"name": "Jim"}
         # Success:
-        #     200 {"data": {"users": {"1234": {"name": "Jim", "updated": "2020-01-01T00:00:00Z"}}}}
+        #     200 {
+        #       "key": ["users", 0],
+        #       "data": {
+        #           "users": [
+        #               [1234, "Jim", "2020-01-01T00:00:00Z"] 
+        #           ]
+        #       },
+        #       "head": {
+        #           "users": ["id", "name", "updated"]
+        #       }
+        #     }
 
         # 2c. change password
         # Request:
@@ -70,14 +113,28 @@ class IntegrationTestCase(django.T
 
         # 3. list users, groups, and users in groups
         # Request:
-        #     GET /api/test/?take.users=name&take.groups=name&take.groups.users=name
+        #     GET /api/test/?take.users=id,name&take.groups=id,name&take.groups.users=id
         # Success:
         #     200 {
         #         "key": ["."],
         #         "data": {
-        #             ".": {"users": [1, 2, 3, 4], "groups": [1, 2, 3, 4]}},
-        #             "users": {...},
-        #             "groups": {...},
+        #             ".": [[1, 2, 3, 4], [1, 2, 3, 4]],
+        #             "users": [
+        #               [1, "joe"],
+        #               [2, "john"],
+        #               [3, "jim"],
+        #               [4, "jay"]
+        #             },
+        #             "groups": [
+        #               [1, "A", [1, 2]],
+        #               [2, "B", [1, 3]],
+        #               [3, "C", [4]]
+        #             ]
+        #         }
+        #         "head": {
+        #           ".": ["users", "groups"],
+        #           "users": ["id", "name"],
+        #           "groups": ["id", "name", "users"]
         #         }
         #     }
 
@@ -87,7 +144,7 @@ class IntegrationTestCase(django.T
         test = Space(name='test', server=server)
 
         def login(resource, request, query):
-            api_key = query.state['.body').get('api_key')
+            api_key = query.state('body').get('api_key')
             api_key = json.loads(str(base64.b64decode(api_key)))
             if authenticate(username, password):
                 pass
@@ -112,7 +169,9 @@ class IntegrationTestCase(django.T
             },
             fields={
                 "user": {
-                    "type": "?@users",
+                    "type": {
+                        "anyOf": ["null", "@users"]
+                    }
                     "source": ".request.user.id"
                 },
                 "username": {
@@ -151,24 +210,24 @@ class IntegrationTestCase(django.T
             },
             can={
                 'get': {
-                    '.or': [{
-                        'id': {
-                            '.equals': '.request.user.id'
-                        }
+                    'or': [{
+                        '=': [
+                            'id', '.request.user.id'
+                        ]
                     }, {
-                        '.request.user.id': {
-                            '.in': 'groups.users'
-                        }
+                        'in': [
+                            '.request.user.id', 'groups.users'
+                        ]
                     }, {
-                        '.request.user.is_superuser': True
+                        '=': ['.request.user.is_superuser', True]
                     }]
                 },
                 'inspect': True,
-                'add': {'.request.user.is_superuser': True},
-                'set': {'.request.user.is_superuser': True},
-                'edit': {'.request.user.is_superuser': True},
-                'delete': {'.request.user.is_superuser': True},
-                'change-password': {'id': {'.equals': '.request.user.id'}}
+                'add': {'=': ['.request.user.is_superuser', True]},
+                'set': {'=': ['.request.user.is_superuser', True]},
+                'edit': {'=': ['.request.user.is_superuser', True]},
+                'delete': {'=': ['.request.user.is_superuser', True]},
+                'change-password': {'=': ['id', '.request.user.id']}
             },
             parameters={
                 'change-password': {
@@ -177,9 +236,9 @@ class IntegrationTestCase(django.T
                     },
                     'new_password': {
                         'type': {
-                            'is': 'string',
+                            'type': 'string',
                             'min_length': 10,
-                        },
+                        }
                     },
                     'confirm_password': {
                         'type': 'string',
@@ -189,7 +248,7 @@ class IntegrationTestCase(django.T
             before={
                 'change-password': {
                     'check': {
-                        '.equal': [
+                        '=': [
                             'confirm_password',
                             'new_password'
                         ]
@@ -208,11 +267,11 @@ class IntegrationTestCase(django.T
         test.query('?take.users=id,name&page.size=10&take.groups=id')
         # ~ /users/?show=id + /groups/?show=id
         # -> {"data": {"users": ...}}
-        query = test.users.query(f'/{user.id}/?show=id,name&page.size=2&method=get')
+        query = test.users.query(f'/{user.id}/?take=id,name&page.size=2&method=get')
         query2 = (
             test.query
             .resource('users')
-            .show('id', 'name')
+            .take('id', 'name')
             .page(size=10).
             .method('get')
         )
@@ -221,13 +280,9 @@ class IntegrationTestCase(django.T
         context = {
             'request': {
                 'user': {
-                    'id': '1', 'is_superuser': True
+                    'id': '1',
+                    'is_superuser': True
                 }
             }
         }
         result = query.execute(**context)
-
-        main = result.main
-        data = result.data
-        meta = result.meta
-

@@ -3,14 +3,14 @@ import re
 PAGE = 'page'
 INSPECT = 'inspect'
 METHOD = 'method'
-SHOW = 'show'
+TAKE = 'take'
 SORT = 'sort'
 GROUP = 'group'
 WHERE = 'where'
 
 LEVELED_FEATURES = {
     GROUP,
-    SHOW,
+    TAKE,
     SORT,
     WHERE
 }
@@ -42,7 +42,7 @@ def get_feature(key):
 
 def get_feature_separator(feature):
     if feature in LEVELED_FEATURES:
-        return '~'
+        return ':'
     else:
         return '.'
 
@@ -54,7 +54,7 @@ def get_sort_fields(value):
     return FIELD_SEPARATOR_REGEX.split(value)
 
 
-def get_show_fields(value):
+def get_take_fields(value):
     if isinstance(value, list):
         value = ','.join(value)
 

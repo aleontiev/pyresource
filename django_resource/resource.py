@@ -25,7 +25,7 @@ class Resource(object):
                 "source": {
                     "join": {
                         "separator": "/",
-                        "targets": ["space.url", "name"]
+                        "values": ["space.url", "name"]
                     }
                 },
                 "can": {"set": False}
@@ -41,7 +41,7 @@ class Resource(object):
                 "description": ("Whether or not the resource represents one record"),
             },
             "description": {
-                "type": "?string",
+                "type": ["null", "string"],
                 "description": "Explanation of the resource",
             },
             "space": {
@@ -50,52 +50,64 @@ class Resource(object):
                 "description": "The space containing the resource",
             },
             "fields": {
-                "type": {"is": "array", "of": "@fields"},
+                "type": {
+                    "type": "array",
+                    "items": "@fields"
+                },
                 "inverse": "resource",
                 "description": "The fields that make up the resource",
             },
             "can": {
                 "type": {
-                    "is": "union",
-                    "of": [
-                        "null",
-                        {"is": "array", "of": "string"},
+                    "anyOf": [
+                        {"type": "null"},
+                        {"type": "array", "items": "string"},
                         {
-                            "is": "object",
-                            "of": {"is": "union", "of": ["null", "boolean", "object"]},
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": ["null", "boolean", "object"]
+                            }
                         },
-                    ],
-                },
+                    ]
+                ],
                 "description": "A map from method name to access rule",
                 "example": {
                     "get": True,
                     "clone.record": {
-                        ".or": [{
-                            "updated": {
-                                "not.less.": "created"
+                        "or": [{
+                            "not": {
+                                "<": ["updated", "created"]
                             }
                         }, {
-                            "location.name": {
-                                "not.in": ["USA", "UK"],
+                            "not.in": {
+                                "location.name": ["'USA'", "'UK'"],
                             }
                         }]
                     },
                 },
             },
             "parameters": {
-                "type": {"is": "?object", "of": {"is": "object", "of": "type"}},
+                "type": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "type"
+                    }
+                },
                 "description": "An object of custom input keys",
                 "example": {
                     "clone.record": {"remap": {"is": "object", "of": "string"}}
                 },
             },
             "bases": {
-                "type": {"is": "array", "of": "?@resources"},
+                "type": {
+                    "type": "array",
+                    "items": "@resources"
+                },
                 "inverse": "children",
                 "description": "The parent resource",
             },
             "features": {
-                "type": "?object",
+                "type": ["null", "object"],
                 "description": "All features supported by this resource",
                 "example": {
                     "page": {"max": 100},
@@ -105,7 +117,7 @@ class Resource(object):
                 },
             },
             "before": {
-                "type": "?object",
+                "type": ["null", "object"],
                 "description": "Map of pre-event handlers",
                 "example": {
                     "delete": {
@@ -122,14 +134,17 @@ class Resource(object):
                 },
             },
             "after": {
-                "type": "?object",
+                "type": ["null", "object"],
                 "description": "Map of post-event handlers",
                 "example": {
                     "get.record": {"webhook": "https://webhooks.io/example/"},
                     "add": {"increment": "creator.num_created"},
                 },
             },
-            "abstract": {"type": "boolean", "default": False},
+            "abstract": {
+                "type": "boolean",
+                "default": False
+            },
         }
 
     def __repr__(self):
