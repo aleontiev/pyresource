@@ -54,6 +54,9 @@ class DjangoSchemaResolver(SchemaResolver):
 class Executor(object):
     """Executes Query, returns dict response"""
 
+    def __init__(self, resource, **kwargs):
+        self.resource = resource
+
     def get(self, query, identity=None):
         """
             Arguments:

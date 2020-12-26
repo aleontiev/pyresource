@@ -2,7 +2,7 @@ from django.template import Template, Context
 from django.utils.functional import cached_property  # noqa
 
 
-def resolve_template(template, context):
+def resolve(template, context):
     template = Template(template)
     context = Context(context)
     return template.render(context)

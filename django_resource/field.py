@@ -1,7 +1,7 @@
 from .utils import cached_property
 from .types import is_link, is_list, validate
 from .resource import Resource, is_resolved
-from .expressions import execute
+from .expression import execute
 from .exceptions import TypeValidationError
 
 

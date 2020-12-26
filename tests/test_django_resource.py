@@ -291,13 +291,13 @@ class IntegrationTestCase(TestCase):
         self.assertEqual(users.space.name, 'test')
         self.assertEqual(users.space, test)
 
-        query1 = test.query('users?take=id,name&page.size=10&method=get')
-        test.query('?take.users=id,name&page.size=10&take.groups=id')
+        query1 = test.data.query('users?take=id,name&page.size=10&method=get')
+        test.data.query('?take.users=id,name&page.size=10&take.groups=id')
         # ~ /users/?show=id + /groups/?show=id
         # -> {"data": {"users": ...}}
-        query = test.users.query(f'/{user.id}/?take=id,name&page.size=2&method=get')
+        query = test.data.query(f'/{user.id}/?take=id,name&page.size=2&method=get')
         query2 = (
-            test.query
+            test.data.query
             .resource('users')
             .take('id', 'name')
             .page(size=10)

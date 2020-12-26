@@ -64,7 +64,7 @@ class Resource(object):
                             }
                         },
                     ]
-                ],
+                },
                 "description": "A map from method name to access rule",
                 "example": {
                     "get": True,

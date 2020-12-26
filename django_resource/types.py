@@ -82,7 +82,7 @@ def get_link(T):
 
 def is_list(T):
     """Return true if T is a list type or optional list type"""
-    base_type = get_base_type(T)
+    base_type = get_type_name(T)
     if base_type:
         # direct type
         return base_type == 'array'
@@ -94,11 +94,28 @@ def is_list(T):
                 if is_list(item):
                     return True
 
+def validate_object(type, value, throw=False):
+    if not isinstance(value, dict) and throw:
+        if throw:
+            raise TypeValidationError(f'expecting object but got: {value}')
+        return False
+    return True
+
+
+def validate_array(type, value, throw=False):
+    if not isinstance(value, list) and throw:
+        if throw:
+            raise TypeValidationError(f'expecting array but got: {value}')
+        return False
+    return True
+
 
 def validate_link(type, value, throw=False):
     if not isinstance(value, (object, int, float, str)):
-        raise TypeValidationError(f'expecting link but got: {value}')
-    return self.validate_multi(type, value, throw=throw)
+        if throw:
+            raise TypeValidationError(f'expecting link but got: {value}')
+        return False
+    return validate_multi(type, value, throw=throw)
 
 
 def validate_boolean(type, value, throw=False):
@@ -108,7 +125,7 @@ def validate_boolean(type, value, throw=False):
         if throw:
             raise TypeValidationError(f'expecting boolean but got: {value}')
         return False
-    return self.validate_multi(type, value, throw=throw)
+    return validate_multi(type, value, throw=throw)
 
 
 def validate_null(type, value, throw=False):
@@ -116,7 +133,7 @@ def validate_null(type, value, throw=False):
         if throw:
             raise TypeValidationError(f'expecting boolean but got: {value}')
         return False
-    return self.validate_multi(type, value, throw=throw)
+    return validate_multi(type, value, throw=throw)
 
 def validate_number(type, value, throw=True):
     if not isinstance(value, (int, float, Decimal)):
@@ -124,7 +141,7 @@ def validate_number(type, value, throw=True):
         if throw:
             raise TypeValidationError(f'expecting string but got: {value}')
         return False
-    return self.validate_multi(type, value, throw=throw)
+    return validate_multi(type, value, throw=throw)
 
 
 def validate_string(type, value, throw=True):
@@ -132,7 +149,7 @@ def validate_string(type, value, throw=True):
         if throw:
             raise TypeValidationError(f'expecting string but got: {value}')
         return False
-    return self.validate_multi(type, value, throw=throw)
+    return validate_multi(type, value, throw=throw)
 
 
 def get_type_property(type, key):
@@ -176,7 +193,7 @@ def validate_multi(type, value, throw=True):
         return False
     if not_ and validate(not_, value, throw=False):
         if throw:
-            raise TypeValidationError(f'not({not}) was satisfied by: {value}')
+            raise TypeValidationError(f'not({not_}) was satisfied by: {value}')
         return False
     return True
 
@@ -198,11 +215,11 @@ def get_type_names(type):
 
 
 def validate(type, value, throw=True):
-    base_type = get_base_type(type)
+    base_type = get_type_name(type)
 
     if base_type == 'array':
         # array
-        return validate_array(type, value, throw=throw):
+        return validate_array(type, value, throw=throw)
     elif base_type == 'object':
         # object
         return validate_object(type, value, throw=throw)
@@ -215,7 +232,7 @@ def validate(type, value, throw=True):
         return validate_number(type, value, throw=throw)
     elif base_type == 'boolean':
         return validate_boolean(type, value, throw=throw)
-    elif base_type.startswith('@'):
+    elif base_type and base_type.startswith('@'):
         # link type
         return validate_link(type, value, throw=throw)
     elif base_type is None or base_type == 'any':

@@ -8,9 +8,11 @@ authors = ["aleontiev <alonetiev@gmail.com>"]
 python = "^3.7"
 django = "^2.2.4"
 ttable = "^0.6.3"
+pytest-django = "^4.1.0"
+psycopg2 = "^2.8.6"
 
 [tool.poetry.dev-dependencies]
-pytest = "^3.0"
+pytest = "^5.4"
 ipython = "^7.10.2"
 
 [build-system]
