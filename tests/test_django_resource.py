@@ -7,7 +7,7 @@ from django_resource.server import Server
 
 
 
-class IntegrationTestCase(django.T
+class IntegrationTestCase(TestCase):
     def test_version(self):
         self.assertEqual(__version__, '0.1.0')
 
@@ -152,7 +152,7 @@ class IntegrationTestCase(django.T
         def logout(resource, request, query):
             pass
 
-        def change_password(resource):
+        def change_password(resource, request, query):
             pass
 
         session = Resource(
@@ -169,18 +169,16 @@ class IntegrationTestCase(django.T
             },
             fields={
                 "user": {
-                    "type": {
-                        "anyOf": ["null", "@users"]
-                    }
-                    "source": ".request.user.id"
+                    "type": ["null", "@users"],
+                    "source": ".request.user_id"
                 },
                 "username": {
                     "type": "string",
-                    "can": {"login": True, "get": False, "set": False}
+                    "can": {"login": True, "get": False}
                 },
                 "password": {
                     "type": "string",
-                    "can": {"login": True, "get": False, "set": False}
+                    "can": {"login": True, "get": False}
                 }
             },
             methods={
@@ -196,12 +194,42 @@ class IntegrationTestCase(django.T
             space=test,
             fields={
                 'id': 'id',
-                'name': 'last_name',
+                'first_name': 'first_name',
+                'last_name': 'last_name',
+                'name': {
+                    'source': {
+                        'join': {
+                            'items': [
+                                {
+                                    'case': [{
+                                        'when': {
+                                            '=': ['gender', '"male"'],
+                                        },
+                                        'then': '"Mr."'
+                                    }, {
+                                        'when': {
+                                            '=': ['gender', '"female"'],
+                                        },
+                                        'then': '"Mrs."'
+                                    }, {
+                                        'else': ''
+                                    }]
+                                },
+                                'first_name',
+                                'last_name'
+                            ],
+                            'separator': ' '
+                        }
+                    },
+                    'can': {
+                        'set': False,
+                        'delete': False
+                    }
+                },
                 'email': 'email',
                 'groups': {
                     'inverse': 'users',
                     'lazy': True,
-                    'default': [],
                     'can': {
                         'set': False,
                         'delete': False
@@ -212,22 +240,22 @@ class IntegrationTestCase(django.T
                 'get': {
                     'or': [{
                         '=': [
-                            'id', '.request.user.id'
+                            'source.id', 'request.user_id'
                         ]
                     }, {
                         'in': [
-                            '.request.user.id', 'groups.users'
+                            'request.user_id', 'resource.users'
                         ]
                     }, {
-                        '=': ['.request.user.is_superuser', True]
+                        '=': ['request.is_superuser', True]
                     }]
                 },
                 'inspect': True,
-                'add': {'=': ['.request.user.is_superuser', True]},
-                'set': {'=': ['.request.user.is_superuser', True]},
-                'edit': {'=': ['.request.user.is_superuser', True]},
-                'delete': {'=': ['.request.user.is_superuser', True]},
-                'change-password': {'=': ['id', '.request.user.id']}
+                'add': {'=': ['request.is_superuser', True]},
+                'set': {'=': ['request.is_superuser', True]},
+                'edit': {'=': ['request.is_superuser', True]},
+                'delete': {'=': ['request.is_superuser}', True]},
+                'change-password': {'=': ['id', 'request.user_id']}
             },
             parameters={
                 'change-password': {
@@ -249,8 +277,8 @@ class IntegrationTestCase(django.T
                 'change-password': {
                     'check': {
                         '=': [
-                            'confirm_password',
-                            'new_password'
+                            'parameters.confirm_password',
+                            'parameters.new_password'
                         ]
                     }
                 }
@@ -272,7 +300,7 @@ class IntegrationTestCase(django.T
             test.query
             .resource('users')
             .take('id', 'name')
-            .page(size=10).
+            .page(size=10)
             .method('get')
         )
         self.assertEqual(query.state, query2.state)
@@ -285,4 +313,3 @@ class IntegrationTestCase(django.T
                 }
             }
         }
-        result = query.execute(**context)

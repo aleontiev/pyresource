@@ -1,5 +1,6 @@
 from .resource import Resource
 from .types import get_link, get_type_name, get_type_names
+from decimal import Decimal
 
 
 class Space(Resource):
@@ -16,12 +17,7 @@ class Space(Resource):
             },
             "url": {
                 "type": "string",
-                "source": {
-                    "join": {
-                        "separator": "/",
-                        "values": ["server.url", "name"]
-                    }
-                },
+                "source": "{fields.server.url}/{fields.name}",
                 "can": {"set": False}
             },
             "name": {
@@ -94,39 +90,79 @@ class Space(Resource):
             raise Exception(f'Invalid resource: {name}')
 
     # e.g. "spaces" "."
-    def resolve_link(self, name, key):
+    def resolve_link(self, name, key, throw=True):
         records = self._records.get(name)
         if not records:
             records = self._records[name] = {}
 
         record = records.get(key, None)
         if not record:
-            record = records[key] = self.resolve_record(name, key)
+            try:
+                record = records[key] = self.resolve_record(name, key)
+            except Exception:
+                if throw:
+                    raise
+                else:
+                    # silently return None
+                    return None
         return record
 
-    def resolve(self, T, value):
+    def resolve(self, T, value, throw=True):
         name = get_type_name(T)
         names = get_type_names(T)
         if name:
             if name == 'object':
-                child = get_type_property(T, 'additionalProperties')
-
-                value = {k: self.resolve(child, v) for k, v in value.items()}
+                properties = get_type_property(T, 'properties')
+                additional = get_type_property(T, 'additionalProperties')
+                if not isinstance(value, dict):
+                    if throw:
+                        raise ValueError(f'Failed to resolve: {value} not an object')
+                    return value
+                value = {
+                    k: self.resolve(
+                        additional if k not in properties else properties[k], v, throw=throw
+                    ) for k, v in value.items()
+                }
             elif name == 'array':
-
-                value = [self.resolve(child, v) for v in value]
-            elif name == "link":
-                link = get_link(T)
-                if not link:
-                    raise ValueError(f"Failed to resolve: {T} not of link type")
-                return self.resolve_link(link, value)
+                if not isinstance(value, list):
+                    if throw:
+                        raise ValueError(f'Failed to resolve: {value} not an object')
+                    return value
+                items = get_type_property(T, 'items')
+                if items:
+                    value = [self.resolve(items, v, throw=throw) for v in value]
+            elif name.startswith('@'):
+                link = get_link(name)
+                return self.resolve_link(link, value, throw=throw)
+            elif name == 'null':
+                if value is not None:
+                    if throw:
+                        raise ValueError(f'Failed to resolve: {value} is not null')
+                    return value
+            elif name == 'boolean':
+                if not isinstance(value, bool):
+                    if throw:
+                        raise ValueError(f'Failed to resolve: {value} not a boolean')
+                    return value
+            elif name == 'number':
+                if not isinstance(value, (int, float, Decimal)):
+                    if throw:
+                        raise ValueError(f'Failed to resolve: {value} not a number')
+                    return value
         if names:
-            if len(names) == 2 and "null" in names:
-                value = next(iter(set(names) - {"null"}))
-                if value is None:
-                    return None
-                value = self.resolve(child, value)
-            # TODO: support resolving more complex types
+            for name in names:
+                try:
+                    val = self.resolve(name, value, throw=True)
+                except ValueError:
+                    # does not match this schema
+                    continue
+                else:
+                    # matched this schema
+                    return val
+            if throw:
+                raise ValueError(
+                    f'Failed to resolve: {value} does not match any of {names}'
+                )
         return value
 
     def get_urlpatterns(self):

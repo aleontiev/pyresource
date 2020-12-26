@@ -1,12 +1,8 @@
 from .utils import cached_property
 from .types import is_link, is_list, validate
 from .resource import Resource, is_resolved
+from .expressions import execute
 from .exceptions import TypeValidationError
-
-
-def last_part(key, sep='.'):
-    parts = key.split(sep)
-    return parts[-1]
 
 
 class Field(Resource):
@@ -34,9 +30,6 @@ class Field(Resource):
             "can": {
                 "type": [{
                     "type": "object",
-                    "additionalProperties": {
-                        "type": "boolean"
-                    }
                 }, {
                     "type": "array",
                     "items": {
@@ -58,10 +51,19 @@ class Field(Resource):
     def setup(self):
         if not self._setup:
             # set initial value via parent
-            name = self.get_option('name')
-            default = self.get_option('default')
-            value = self.parent.get_option(name, default)
+            source = self.get_option('source')
+            if source:
+                # get value from source expression
+                value = self.get_from_source(source)
+            else:
+                # get value from parent by name
+                name = self.get_option('name')
+                default = self.get_option('default')
+                value = self.parent.get_option(name, default)
             self.set_value(value)
+
+    def get_from_source(self, source):
+        return execute(source, {'fields': self.parent})[0]
 
     @property
     def parent(self):

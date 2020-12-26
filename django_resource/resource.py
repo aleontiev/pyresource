@@ -22,12 +22,7 @@ class Resource(object):
             },
             "url": {
                 "type": "string",
-                "source": {
-                    "join": {
-                        "separator": "/",
-                        "values": ["space.url", "name"]
-                    }
-                },
+                "source": "{fields.space.url}/{fields.name}",
                 "can": {"set": False}
             },
             "name": {

@@ -36,6 +36,30 @@ def format_expression(expression, context):
         return resolve(expression, {"self": context})
 
 
+def join_expression(expression, context):
+    if not expression:
+        return expression
+
+    if isinstance(expression, dict):
+        # {"join": {"values": ["a", "b"], "separator": "/"}}
+        values = expression.get('values')
+        separator = expression.get('separator', ' ')
+        values = [get_expression(v, context) for v in values]
+        return separator.join(values)
+
+    elif isinstance(expression, list):
+        # {"join": ["a", "b"]}
+        separator = ' '
+        values = expression
+    elif isinstance(expression, str):
+        # {"join": "a"}
+        separator = ' '
+        values = get_expression(expression, context)
+        if not isinstance(values, list):
+            raise ValueError(f'join expecting {values} to be list')
+    return separator.join(values)
+
+
 def value_expression(expression, context):
     return expression
 
@@ -44,6 +68,7 @@ methods = {
     "get": get_expression,
     "format": format_expression,
     "value": value_expression,
+    "join": join_expression
 }
 
 
@@ -66,3 +91,6 @@ def execute(expression, context):
         else:
             # pass through
             return expression, False
+    if isinstance(expression, str):
+        method = "get"
+        return methods[method](expression, context), True
