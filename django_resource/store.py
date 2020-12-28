@@ -72,12 +72,18 @@ class DjangoExecutor(Executor):
 
 class Store(object):
     def __init__(self, resource):
-        self.resource = resource
-        self.resolver = self.get_resolver(resource)
-        self.executor = self.get_executor(resource)
+        if resource.__class__.__name__ == 'Space':
+            self.space = resource
+            self.resource = None
+        else:
+            self.resource = resource
+            self.space = resource.space
 
-    def get_executor(self, resource):
-        return DjangoExecutor(resource)
+        self.resolver = self.get_resolver(self.space)
+        self.executor = self.get_executor(self.space)
+
+    def get_executor(self, space):
+        return DjangoExecutor(space)
 
     @property
     def query(self):
@@ -85,9 +91,11 @@ class Store(object):
 
     def get_query(self, querystring=None):
         initial = {
-            ".resource": self.resource.name,
-            ".space": self.resource.space.name
+            ".space": self.space.name
         }
+        if self.resource:
+            initial[".resource"] = self.resource.name
+
         executor = self.executor
         if querystring:
             return Query.from_querystring(
@@ -101,8 +109,8 @@ class Store(object):
                 executor=executor
             )
 
-    def get_resolver(self, resource):
-        return DjangoSchemaResolver(resource)
+    def get_resolver(self, space):
+        return DjangoSchemaResolver(space)
 
     def get_schema(self, source):
         return self.resolver.get_schema(source)

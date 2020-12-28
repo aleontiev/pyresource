@@ -26,16 +26,12 @@ class IntegrationTestCase(TestCase):
         #     POST /api/test/session?take.user=id,name,email {"username": "test", "password": "test"}
         # Success:
         #     201 {
-        #       "key": ["session"],
         #       "data": {
-        #           "users": [
-        #               [1234, "Joe Smith", "joe@smith.com"]
-        #           },
-        #           "session": [1234]
-        #       },
-        #       "head": {
-        #           "users": ["id", "name", "email"],
-        #           "session": ["user"]
+        #           "user": {
+        #               "id": 1234,
+        #               "name": "Joe Smith",
+        #               "email": "joe@smith.com"
+        #           }
         #       }
         #     }
         # Failure:
@@ -54,18 +50,26 @@ class IntegrationTestCase(TestCase):
         #       }
         #     }
 
-        # 2a. view profile
+        # 2a. view user ID only
         # Request:
-        #     GET /api/test/session/user/?take=id,name
+        #     GET /api/test/session/user
         # Success:
         #     200 {
-        #       "key": ["users", 0],
+        #       "data": 1234
+        #     }
+
+        # 2a. view user details
+        # Request:
+        #     GET /api/test/session/user/?take=id,name,groups
+        # Success:
+        #     200 {
         #       "data": {
-        #           "users": [[1234, "John"]]
+        #           "id": 1234,
+        #           "name": "John",
+        #           "groups": [
+        #               1, 2, 3, 4, 5
+        #           ]
         #       },
-        #       "head": {
-        #           "users": ["id", "name"]
-        #       }
         #     }
 
         # 2b. change name
@@ -73,22 +77,18 @@ class IntegrationTestCase(TestCase):
         #     PATCH /api/test/users/1234 {"name": "Jim"}
         # Success:
         #     200 {
-        #       "key": ["users", 0],
         #       "data": {
-        #           "users": [
-        #               [1234, "Jim", "2020-01-01T00:00:00Z"] 
-        #           ]
+        #           "id": 1234,
+        #           "name": "Jim",
+        #           "updated": "2020-01-01T00:00:00Z"
         #       },
-        #       "head": {
-        #           "users": ["id", "name", "updated"]
-        #       }
         #     }
 
         # 2c. change password
         # Request:
         #     POST /api/test/users/1234?method=change-password {"old_password": "123", "new_password": "asd", "confirm_password": "asd"}
         # Success:
-        #     200 {"key": ["users", "1234"], "data": {"users": {"1234": {"updated": "2020-01-01T00:00:00Z"}}}}
+        #     200 {"data": "ok"}
         # Failure:
         #     400 {
         #       "errors": {
@@ -113,28 +113,36 @@ class IntegrationTestCase(TestCase):
 
         # 3. list users, groups, and users in groups
         # Request:
-        #     GET /api/test/?take.users=id,name&take.groups=id,name&take.groups.users=id
+        #     GET /api/test/?take.users=id,name&take.groups=id,name&take.groups.users=id,name
         # Success:
         #     200 {
-        #         "key": ["."],
         #         "data": {
-        #             ".": [[1, 2, 3, 4], [1, 2, 3, 4]],
-        #             "users": [
-        #               [1, "joe"],
-        #               [2, "john"],
-        #               [3, "jim"],
-        #               [4, "jay"]
-        #             },
-        #             "groups": [
-        #               [1, "A", [1, 2]],
-        #               [2, "B", [1, 3]],
-        #               [3, "C", [4]]
-        #             ]
-        #         }
-        #         "head": {
-        #           ".": ["users", "groups"],
-        #           "users": ["id", "name"],
-        #           "groups": ["id", "name", "users"]
+        #             "users": [{
+        #               "id": 1,
+        #               "name": "Joe"
+        #             }, ...],
+        #             "groups": [{
+        #               "id": 1,
+        #               "users": [{
+        #                   "id": 1,
+        #                   "name": "Joe",
+        #               }, ...]
+        #             }]
+        #         },
+        #         "meta": {
+        #             "page": {
+        #                 "data.users": {
+        #                   "next": "/api/test?take.users=id,name&page.users:cursor=ABCDEF"
+        #                   "records": 1000
+        #                 },
+        #                 "data.groups": {
+        #                   "next": "/api/test?take.groups.users=id,name&take.groups=id,name&page.groups:cursor=ABCDEF"
+        #                   "records": 1000
+        #                 },
+        #                 "data.groups.0.users": {
+        #                   "next": "/api/test/groups/0/users?take=id,name&page:cursor=ABCDEF"
+        #                 }
+        #             }
         #         }
         #     }
 
@@ -240,11 +248,11 @@ class IntegrationTestCase(TestCase):
                 'get': {
                     'or': [{
                         '=': [
-                            'source.id', 'request.user_id'
+                            'id', 'request.user_id'
                         ]
                     }, {
                         'in': [
-                            'request.user_id', 'resource.users'
+                            'request.user_id', 'users'
                         ]
                     }, {
                         '=': ['request.is_superuser', True]
@@ -277,8 +285,8 @@ class IntegrationTestCase(TestCase):
                 'change-password': {
                     'check': {
                         '=': [
-                            'parameters.confirm_password',
-                            'parameters.new_password'
+                            'confirm_password',
+                            'new_password'
                         ]
                     }
                 }
@@ -292,10 +300,6 @@ class IntegrationTestCase(TestCase):
         self.assertEqual(users.space, test)
 
         query1 = test.data.query('users?take=id,name&page.size=10&method=get')
-        test.data.query('?take.users=id,name&page.size=10&take.groups=id')
-        # ~ /users/?show=id + /groups/?show=id
-        # -> {"data": {"users": ...}}
-        query = test.data.query(f'/{user.id}/?take=id,name&page.size=2&method=get')
         query2 = (
             test.data.query
             .resource('users')
@@ -303,7 +307,18 @@ class IntegrationTestCase(TestCase):
             .page(size=10)
             .method('get')
         )
-        self.assertEqual(query.state, query2.state)
+        self.assertEqual(query1.state, query2.state)
+
+        query3 = test.data.query(
+            '?take.users=id,name&page.size=10&take.groups=id'
+        )
+        query4 = (
+            test.data.query
+            .take.users('id', 'name')
+            .take.groups('id')
+            .page(size=10)
+        )
+        self.assertEqual(query3.state, query4.state)
 
         context = {
             'request': {

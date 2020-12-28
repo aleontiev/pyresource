@@ -17,7 +17,15 @@ class Space(Resource):
             },
             "url": {
                 "type": "string",
-                "source": "{fields.server.url}/{fields.name}",
+                "source": {
+                    "join": {
+                        "items": [
+                            "server.url",
+                            "name"
+                        ]
+                    },
+                    "separator": "/"
+                },
                 "can": {"set": False}
             },
             "name": {
