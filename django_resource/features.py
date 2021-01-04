@@ -12,10 +12,10 @@ LEVELED_FEATURES = {
     GROUP,
     TAKE,
     SORT,
-    WHERE
+    WHERE,
+    PAGE,
 }
 ROOT_FEATURES = {
-    PAGE,
     INSPECT,
     METHOD
 }

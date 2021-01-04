@@ -1,5 +1,6 @@
 from .resource import Resource
 from .types import get_link, get_type_name, get_type_names
+from collections import defaultdict
 from decimal import Decimal
 
 
@@ -53,7 +54,31 @@ class Space(Resource):
         # ...for "server" (e.g. "server")
         # ...for "types" (e.g. "any", "integer", "object")
         self._records = {}
+        self._by_source = None
         return super(Space, self).__init__(**kwargs)
+
+    @property
+    def by_source(self):
+        if self._by_source is None:
+            self._by_source = defaultdict(list)
+            for resource in self.resources:
+                if resource.source and isinstance(resource.source, str):
+                    self._by_source.append(resource)
+        return self._by_source
+
+    def get_resource_for(self, source):
+        resources = self.by_source[source]
+        len_resources = len(resources)
+        if len_resources == 0:
+            raise AttributeError('No resource for {source}')
+        elif len_resources >= 2:
+            # TODO: list all matches
+            raise AttributeError(
+                f'Could not determine resource for {source}, '
+                f'found multiple possible matches: '
+                f'{resources[0].name} and {resources[1].name}'
+            )
+        return resources[0]
 
     def resolve_record(self, name, key):
         from .types import Type

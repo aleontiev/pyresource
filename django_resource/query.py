@@ -68,6 +68,9 @@ class Query(object):
         self._state = state or {}
         self.executor = executor
 
+    def __call__(self, *args, **kwargs):
+        return self.from_querystring(*args, executor=self.executor, state=self.state)
+
     def add(self, record=None, field=None):
         return self._call('add', record=record, field=field)
 
@@ -111,12 +114,22 @@ class Query(object):
     def field(self, name):
         return self._update({"field": name})
 
+    def space(self, name):
+        return self._update({"space": name})
+
+    def resource(self, name):
+        return self._update({"resource": name})
+
     def method(self, name):
         return self._update({"method": name})
 
     @property
     def take(self):
         return NestedFeature(self, "take")
+
+    @property
+    def page(self):
+        return NestedFeature(self, 'page')
 
     @property
     def where(self):
@@ -140,15 +153,18 @@ class Query(object):
 
         return self._update({"inspect": kwargs}, copy=copy, merge=True)
 
-    def page(self, args=None, copy=True, **kwargs):
+    def _page(self, level, args=None, copy=True, **kwargs):
         """
         Example:
-            .page(key='abcdef123a==')
+            .page('abcdef123a==', size=10)
         """
         if args:
-            kwargs = args
+            # cursor arg
+            if isinstance(args, list):
+                args = args[0]
+            kwargs['cursor'] = args
 
-        return self._update({"page": kwargs}, copy=copy, merge=True)
+        return self._update({"page": kwargs}, copy=copy, level=level, merge=True)
 
     def _take(self, level, *args, copy=True):
         kwargs = {}
@@ -194,7 +210,7 @@ class Query(object):
         Example:
             .sort("name", "-created")
         """
-        return self._update({"sort": args}, copy=copy, level=level)
+        return self._update({"sort": list(args)}, copy=copy, level=level)
 
     def _group(self, level, args=None, copy=True, **kwargs):
         """
@@ -334,6 +350,9 @@ class Query(object):
                     # many conditions
                     update = {expression: values}
 
+            if len(update) == 1:
+                update = update[0]
+
             update = {'where': update}
             query._update(
                 update,
@@ -364,6 +383,30 @@ class Query(object):
     @classmethod
     def from_querystring(cls, value, **kwargs):
         result = cls(**kwargs)
+        resource = None
+        if '?' in value:
+            parts = value.split('?')
+            if len(parts) == 2:
+                resource, value = value.split('?')
+                resource = [r for r in resource.split('/') if r]
+                update = {}
+                if len(resource) == 1:
+                    resource = resource[0]
+                    update['resource'] = resource
+                if len(resource) == 2:
+                    resource, record = resource
+                    update['resource'] = resource
+                    update['record'] = record
+                if len(resource) == 3:
+                    resource, record, field = resource
+                    update['resource'] = resource
+                    update['record'] = record
+                    update['field'] = field
+                if update:
+                    result._update(update, copy=False)
+            else:
+                raise ValueError(f'Invalid querystring: {value}')
+
         query = parse_qs(value)
         where = defaultdict(list)  # level -> [args]
         for key, value in query.items():
@@ -398,6 +441,10 @@ class Query(object):
             else:
                 value = coerce_query_values(value)
 
+            if update_key == 'page' and not parts:
+                # default key for page = cursor
+                parts = ['cursor']
+
             update = cls._build_update(parts, update_key, value)
             result._update(
                 update,
@@ -407,5 +454,4 @@ class Query(object):
             )
         if where:
             cls._update_where(result, where)
-
         return result

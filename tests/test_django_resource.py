@@ -86,7 +86,7 @@ class IntegrationTestCase(TestCase):
 
         # 2c. change password
         # Request:
-        #     POST /api/test/users/1234?method=change-password {"old_password": "123", "new_password": "asd", "confirm_password": "asd"}
+        #     POST /api/test/users/1234?method=change-password {"data": {"old_password": "123", "new_password": "asd", "confirm_password": "asd"}}
         # Success:
         #     200 {"data": "ok"}
         # Failure:
@@ -101,13 +101,7 @@ class IntegrationTestCase(TestCase):
         #     }
         #     400 {
         #       "errors": {
-        #           "data": {
-        #               "session": {
-        #                   "old_password": [
-        #                       "incorrect password"
-        #                   ]
-        #               }
-        #           }
+        #           "body.old_password": ["incorrect password"]
         #        }
         #     }
 
@@ -132,15 +126,16 @@ class IntegrationTestCase(TestCase):
         #         "meta": {
         #             "page": {
         #                 "data.users": {
-        #                   "next": "/api/test?take.users=id,name&page.users:cursor=ABCDEF"
-        #                   "records": 1000
+        #                   "next": "/api/test?take.users=id,name&page.users=ABCDEF"
+        #                   "records": 1000,
+        #                   "limit": 100
         #                 },
         #                 "data.groups": {
-        #                   "next": "/api/test?take.groups.users=id,name&take.groups=id,name&page.groups:cursor=ABCDEF"
-        #                   "records": 1000
+        #                   "next": "/api/test?take.groups.users=id,name&take.groups=id,name&page.groups=ABCDEF",
         #                 },
         #                 "data.groups.0.users": {
-        #                   "next": "/api/test/groups/0/users?take=id,name&page:cursor=ABCDEF"
+        #                   "next": "/api/test/groups/12345/users?take=id,name&page=ABCDEF",
+        #                   "limit": 10
         #                 }
         #             }
         #         }
@@ -194,11 +189,38 @@ class IntegrationTestCase(TestCase):
                 'logout': logout
             }
         )
+        groups = Resource(
+            id='test.groups',
+            name='groups',
+            source='test.groups',
+            space=test,
+            fields={
+                'id': 'id',
+                'name': 'name',
+                'users': {
+                    'source': 'users',
+                    'inverse': 'groups',
+                    'lazy': True,
+                    'can': {
+                        'set': False,
+                        'delete': False
+                    }
+                },
+                'created': {
+                    'source': 'created',
+                    'can': {'set': False}
+                },
+                'updated': {
+                    'source': 'updated',
+                    'can': {'set': False}
+                }
+            }
+        )
 
         users = Resource(
             id='test.users',
             name='users',
-            source='auth.user',
+            source='test.user',
             space=test,
             fields={
                 'id': 'id',
@@ -208,21 +230,6 @@ class IntegrationTestCase(TestCase):
                     'source': {
                         'join': {
                             'items': [
-                                {
-                                    'case': [{
-                                        'when': {
-                                            '=': ['gender', '"male"'],
-                                        },
-                                        'then': '"Mr."'
-                                    }, {
-                                        'when': {
-                                            '=': ['gender', '"female"'],
-                                        },
-                                        'then': '"Mrs."'
-                                    }, {
-                                        'else': ''
-                                    }]
-                                },
                                 'first_name',
                                 'last_name'
                             ],
@@ -236,6 +243,7 @@ class IntegrationTestCase(TestCase):
                 },
                 'email': 'email',
                 'groups': {
+                    'source': 'groups',
                     'inverse': 'users',
                     'lazy': True,
                     'can': {
@@ -243,6 +251,21 @@ class IntegrationTestCase(TestCase):
                         'delete': False
                     }
                 },
+                'old_password': {
+                    'type': 'string',
+                    'can': {'get': False, 'set': False, 'change-password': True}
+                },
+                'new_password': {
+                    'type': {
+                        'type': 'string',
+                        'min_length': 10,
+                    },
+                    'can': {'get': False, 'set': False, 'change-password': True}
+                },
+                'confirm_password': {
+                    'type': 'string',
+                    'can': {'get': False, 'set': False, 'change-password': True}
+                }
             },
             can={
                 'get': {
@@ -265,22 +288,6 @@ class IntegrationTestCase(TestCase):
                 'delete': {'=': ['request.is_superuser}', True]},
                 'change-password': {'=': ['id', 'request.user_id']}
             },
-            parameters={
-                'change-password': {
-                    'old_password': {
-                        'type': 'string',
-                    },
-                    'new_password': {
-                        'type': {
-                            'type': 'string',
-                            'min_length': 10,
-                        }
-                    },
-                    'confirm_password': {
-                        'type': 'string',
-                    }
-                }
-            },
             before={
                 'change-password': {
                     'check': {
@@ -299,9 +306,14 @@ class IntegrationTestCase(TestCase):
         self.assertEqual(users.space.name, 'test')
         self.assertEqual(users.space, test)
 
-        query1 = test.data.query('users?take=id,name&page.size=10&method=get')
+        query1 = test.query(
+            'users'
+            '?take=id,name'
+            '&page:size=10'
+            '&method=get'
+        )
         query2 = (
-            test.data.query
+            test.query
             .resource('users')
             .take('id', 'name')
             .page(size=10)
@@ -309,22 +321,62 @@ class IntegrationTestCase(TestCase):
         )
         self.assertEqual(query1.state, query2.state)
 
-        query3 = test.data.query(
-            '?take.users=id,name&page.size=10&take.groups=id'
+        query3 = test.query(
+            '?take.users=*,-name'
+            '&take.groups=id'
+            '&page.users:size=5'
+            '&page.users=ABC'
+            '&sort.groups=-created,id'
+            '&where.groups:updated:gte=created'
+            '&where.users:name:contains="Joe"'
         )
         query4 = (
-            test.data.query
-            .take.users('id', 'name')
+            test.query
+            .take.users('*', '-name')
+            .page.users('ABC', size=5)
             .take.groups('id')
-            .page(size=10)
+            .sort.groups('-created', 'id')
+            .where.groups({'gte': ['updated', 'created']})
+            .where.users({'contains': ['name', '"Joe"']})
         )
         self.assertEqual(query3.state, query4.state)
-
-        context = {
-            'request': {
-                'user': {
-                    'id': '1',
-                    'is_superuser': True
+        self.assertEqual(query3.state, {
+            'take': {
+                'groups': {
+                    'sort': ['-created', 'id'],
+                    'take': {
+                        'id': True
+                    },
+                    'where': {
+                        'gte': ['updated', 'created']
+                    }
+                },
+                'users': {
+                    'page': {
+                        'cursor': 'ABC',
+                        'size': 5
+                    },
+                    'take': {
+                        '*': True,
+                        'name': False
+                    },
+                    'where': {
+                        'contains': ['name', '"Joe"']
+                    }
                 }
-            }
-        }
+            },
+            'space': 'test'
+        })
+
+        query5 = test.query(
+            '/users/1/groups'
+            '?take=id,name'
+        )
+        query6 = (
+            test.query
+            .resource('users')
+            .record('1')
+            .field('groups')
+            .take('id', 'name')
+        )
+        self.assertEqual(query5.state, query6.state)

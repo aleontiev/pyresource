@@ -12,3 +12,10 @@ DATABASES["default"] = {
     "NAME": "resource_dev",
     "TEST": {"NAME": "resource_test"},
 }
+INSTALLED_APPS = (
+    "django.contrib.sessions",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "tests"
+)
+AUTH_USER_MODEL = "tests.User"

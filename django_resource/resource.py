@@ -215,6 +215,10 @@ class Resource(object):
     def data(self):
         return Store(self)
 
+    @property
+    def query(self):
+        return self.data.query
+
     @classmethod
     def get_fields(cls):
         return cls.Schema.fields
@@ -228,11 +232,25 @@ class Resource(object):
                 this = str(self)
                 raise AttributeError(f"{key} is not a valid field of {this}")
 
-            schema = fields[key]
-            if not isinstance(schema, dict):
-                # shorthand where source field name is given as the only argument
-                # in this case, use the store (e.g. DjangoStore) to determine the schema
-                schema = self.data.get_schema_for(schema)
+            field = fields[key]
+            resolver = self.data.resolver
+            # self.source: the model's source
+            # schema: the field's source
+
+            space = None
+            if isinstance(field, str) or 'type' not in field:
+                # may need self.space to resolve field type
+                # for foreign key fields
+                space = self.space
+            field = resolver.get_field_schema(
+                self.source,
+                field,
+                space=space
+            )
+            source = schema.get('source')
+
+            if not source:
+                raise AttributeError(f'{key} field has no source')
 
             resource_id = self.get_meta('id')
             id = f"{resource_id}.{key}"
@@ -241,7 +259,7 @@ class Resource(object):
                 resource=resource_id,
                 id=id,
                 name=key,
-                **schema
+                **field
             )
         return self._fields[key]
 
