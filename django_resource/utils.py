@@ -11,7 +11,7 @@ def resolve(template, context):
 def get(template, context):
     if not template or not context:
         return None
-    parts = template.split('.')
+    parts = template.split('.') if isinstance(template, str) else template
     part = parts[0]
     if isinstance(context, dict):
         next_context = context.get(part, None)

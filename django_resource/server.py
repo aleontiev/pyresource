@@ -6,7 +6,7 @@ from .version import version
 class Server(Resource):
     class Schema:
         id = "server"
-        source = "."
+        source = None
         name = "server"
         singleton = True
         space = "."
@@ -70,7 +70,7 @@ class Server(Resource):
                     },
                     "sort": True,
                     "inspect": True,
-                    "method": True,
+                    "action": True,
                 },
             },
             "types": {
@@ -184,7 +184,7 @@ GET /api/v1/tags/?where:name:in=level
 
 Query:
 {
-    "method": "get",
+    "action": "get",
     "space": "v1",
     "resource": "tags",
     "record": null,

@@ -1,5 +1,6 @@
 from .utils import cached_property
 from .query import Query
+from .exceptions import ResourceMisconfigured
 
 # META_FIELDS: these fields can be inferred from Django models + field source
 META_FIELDS = {'type', 'default', 'choices', 'description', 'unique', 'index'}
@@ -8,17 +9,18 @@ class SchemaResolver(object):
     def get_field_schema(self, source, field, space=None):
         if isinstance(source, dict):
             schema = source
-            source_model = source.get('source')
+            source_model = source.get('model')
         else:
             schema = {'source': field}
             source_model = source
 
+        if not source_model:
+            return field
+
         model = self.get_model(source_model)
 
         if not model:
-            # failed to resolve a model
-            # TODO: throw exception?
-            return schema
+            return field
 
         for field in META_FIELDS:
             if field not in schema:
@@ -50,7 +52,7 @@ class DjangoSchemaResolver(SchemaResolver):
 
     def get_type(self, source, field, space=None):
         if isinstance(field, dict):
-            raise AttributeError(f'cannot determine type from complex source: {source}')
+            raise SchemaResolverError(f'cannot determine type from complex source: {source}')
 
         model = self.get_model(source)
         field_name = field
@@ -97,20 +99,28 @@ class DjangoSchemaResolver(SchemaResolver):
             return add_null(field.null, 'string')
         elif isinstance(field, (models.ForeignKey, models.OneToOneField)):
             if not space:
-                raise AttributeError(f'Could not determine type for {field_name}, space is unknown')
+                raise SchemaResolverError(f'Could not determine type for {field_name}, space is unknown')
 
             related = space.get_resource_for(source)
             return add_null(field.null, f'@{related.name}')
-        #elif isinstance(field, models.ManyToManyField):
-        # TODO: support M2M
-        #    pass
+        elif isinstance(field, models.ManyToManyField):
+            if not space:
+                raise SchemaResolverError(f'Could not determine type for {field_name}, space is unknown')
+            related = space.get_resource_for(source)
+            return {'type': 'array', 'items': f'@{related.name}'}
 
     def get_choices(self, model, field, space=None):
-        model = self.get_model(source)
-        pass
+        choices = field.choices
+        if not choices:
+            return None
+        return choices
 
     def get_description(self, model, field, space=None):
-        pass
+        """Get field description"""
+        doc = field.help_text
+        if not doc:
+            doc = str(field)
+        return doc
 
     def get_unique(self, model, field, space=None):
         pass
@@ -123,7 +133,7 @@ class DjangoSchemaResolver(SchemaResolver):
 
     def get_model(self, source):
         if not source:
-            raise AttributeError('Invalid source (empty)')
+            raise SchemaResolverError('Invalid source (empty)')
 
         if not hasattr(self, '_models'):
             # cache of model name -> model
@@ -139,49 +149,176 @@ class DjangoSchemaResolver(SchemaResolver):
             try:
                 app_label, model_name = source.split(".")
             except Exception:
-                raise AttributeError(f'Invalid source (too many dots): {source}')
+                raise SchemaResolverError(f'Invalid source (too many dots): {source}')
 
             try:
                 models[source] = apps.get_model(app_label=app_label, model_name=model_name)
             except Exception:
-                raise AttributeError('Invalid source (not a registered model)')
+                raise SchemaResolverError(f'Invalid source (not a registered model): {source}')
 
         return models[source]
 
 
 class Executor(object):
     """Executes Query, returns dict response"""
+    def __init__(self, store, **context):
+        self.store = store
+        self.context = context
+
+    def get(self, query, request=None, **context):
+        raise NotImplementedError()
+
+
+class DjangoExecutor(Executor):
+    def get_filters(self, where, query, request):
+        if not where:
+            return None
+
+        # build Q() object for queryset
+        # e.g. 
+        # where = {"or": [{'=': ['.request.user.id', 'id']}, {'>=': ['created', {'now': {}}]}]
+        # filters = Q(id=123) | Q(created__gte=Now())
+        pass
+
+    def get_queryset(self, query, request=None, **context):
+        resource = self.store.resource
+        source = resource.source
+        if isinstance(source, dict):
+            where = source.get('where')
+            source = source.get('model')
+            if not model:
+                raise ValueError('no model')
+            filters = self.get_filters(where, query, request)
+        else:
+            filters = None
+
+        try:
+            model = self.store.resolver.get_model(source)
+        except SchemaResolverError:
+            raise ResourceMisconfigured(f'{resource.id}: cannot lookup model from {source}')
+
+        if filters:
+            try:
+                queryset = model.objects.filter(filters)
+            except Exception as e:
+                raise ResourceMisconfigured(f'{resource.id}: cannot apply filters')
+        else:
+            queryset = model.objects.all()
+
+        # TODO: ordering
+        # TODO: filtering
+        # TODO: pagination
+        # TODO: annotations
+        # TODO: aggregations
+        return self.filter_queryset(queryset, query, request, **context)
+
+    def filter_queryset(self, queryset, query, request, **context):
+        pass
 
     def get(self, query, request=None, **context):
         """
             Arguments:
-                query: query dict
+                query: query object
                 request: request object
-                context: extra context
         """
+        if query.state.get('field'):
+            return self.get_field(query, request=request, **context)
+        elif query.state.get('record'):
+            return self.get_record(query, request=request, **context)
+        elif query.state.get('resource'):
+            return self.get_resource(query, request=request, **context)
+        else:
+            raise ValueError('space execution is not supported')
+
+    def get_resource(self, query, request=None, **context):
+        if not self.can('resource.get', query, request):
+            raise Unauthorized()
+
+        resource = self.store.resource
+        source = resource.source
+        if not source:
+            # no source -> do not use queryset
+            if not resource.singleton:
+                raise ResourceMisconfigured(
+                    f'{resource.id}: cannot execute "get" on a collection with no source'
+                )
+            # singleton -> assume fields are all computed
+            # e.g. user_id with source: ".request.user.id"
+            self.serialize(resource, query, request, meta=meta)
+            return
+
+        meta = {}
+        if resource.singleton:
+            # get queryset and obtain first record
+            record = self.get_queryset(query, request=request, **context).first()
+            if not record:
+                raise ResourceMisconfigured(
+                    f'{resource.id}: could not locate record for singleton resource'
+                )
+            data = self.serialize(resource, query, request, record=record, meta=meta)
+        else:
+            data = []
+            queryset = self.get_queryset(query, request=request, **context)
+            for record in queryset:
+                data.append(self.serialize(resource, record, query, request, meta=meta))
+
+        result = {'data': data}
+        if meta:
+            result['meta'] = meta
+        return result
+
+    def get_record(self, query, request=None, **context):
+        can = self.can('get.record', query, request)
+        if not can:
+            raise Unauthorized()
+
+        queryset = self.get_queryset(
+            query,
+            request=request,
+            can=can,
+            **context
+        )
+        record = queryset.first()
+        meta = {}
+        data = self.serialize(resource, record, query, request, meta=meta)
+        result = {'data': data}
+        if meta:
+            result['meta'] = meta
+        return result
+
+    def get_field(self, query, request=None, **context):
+        if not self.can('field.get', query, request):
+            raise Unauthorized()
+
+        if query.state.get('take'):
+            # use get_related to return related data
+            # this requires "prefetch" permission on this field 
+            # or "get.prefetch" permission on the related field
+            return self.get_related(query, request=request, **context)
+
+        queryset = self.get_queryset(query, request=request, **context)
+
+    def get_related(self, query, request=None, **context):
+        pass  # TODO
+
+    def serialize(self, resource, instance, query=None, request=None):
         pass
 
+    def can(self, action, query, request):
+        return True  # TODO
 
-class DjangoExecutor(Executor):
-    pass
 
 
 class Store(object):
     def __init__(self, resource):
+        self.server = self.resource = self.space = None
         if resource.__class__.__name__ == 'Space':
             self.space = resource
-            self.resource = None
-            self.server = resource.server
-        elif resource.__class__.__name__ == 'Server':
-            self.server = resource
-            self.space = self.resource = None
-        else:
+        elif resource.__class__.__name__ == 'Resource':
             self.resource = resource
-            self.space = resource.space
-            self.server = self.space.server
 
     def get_executor(self):
-        return DjangoExecutor()
+        return DjangoExecutor(self)
 
     def get_resolver(self):
         return DjangoSchemaResolver()
@@ -202,8 +339,9 @@ class Store(object):
         initial = {}
         if self.space:
             initial['space'] = self.space.name
-        if self.resource:
+        elif self.resource:
             initial["resource"] = self.resource.name
+            initial["space"] = self.resource.space.name
 
         executor = self.executor
         if querystring:

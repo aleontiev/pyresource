@@ -14,6 +14,12 @@ def get_expression(expression, context):
     if not expression:
         return expression
 
+    if expression[0] == expression[-1] and expression[0] in {'"', "'"}:
+        return expression[1:-1]
+
+    if not expression.startswith('fields.'):
+        expression = f'fields.{expression}'
+
     expression = resolve(expression, context)
     return get(expression, context)
 
@@ -40,24 +46,26 @@ def join_expression(expression, context):
     if not expression:
         return expression
 
+    separator = None
     if isinstance(expression, dict):
         # {"join": {"values": ["a", "b"], "separator": "/"}}
         values = expression.get('values')
         separator = expression.get('separator', ' ')
         values = [get_expression(v, context) for v in values]
-        return separator.join(values)
-
     elif isinstance(expression, list):
         # {"join": ["a", "b"]}
-        separator = ' '
-        values = expression
+        separator = ''
+        values = [get_expression(v, context) for v in expression]
     elif isinstance(expression, str):
         # {"join": "a"}
         separator = ' '
         values = get_expression(expression, context)
         if not isinstance(values, list):
             raise ValueError(f'join expecting {values} to be list')
-    return separator.join(values)
+    else:
+        raise ValueError(f'expression is not supported: {expression}')
+
+    return separator.join([v for v in values if v])
 
 
 def value_expression(expression, context):
@@ -68,7 +76,8 @@ methods = {
     "get": get_expression,
     "format": format_expression,
     "value": value_expression,
-    "join": join_expression
+    "join": join_expression,
+    "concat": join_expression
 }
 
 

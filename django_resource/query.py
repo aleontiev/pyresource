@@ -89,15 +89,15 @@ class Query(object):
     def options(self, record=None, field=None):
         return self._call('options', record=record, field=field)
 
-    def execute(self, **kwargs):
+    def execute(self, request=None, **kwargs):
         executor = self.executor
         if not executor:
             raise QueryExecutionError(f'Query cannot execute without executor')
-        method_name = self.state.get('method', 'get')
-        method = getattr(self.executor, method_name, None)
-        if not method:
-            raise QueryValidationError(f'Invalid method {method_name}')
-        return method(self, **kwargs)
+        action_name = self.state.get('action', 'get')
+        action = getattr(self.executor, action_name, None)
+        if not action:
+            raise QueryValidationError(f'Invalid action "{action_name}"')
+        return action(self, request=request, **kwargs)
 
     @property
     def state(self):
@@ -120,8 +120,8 @@ class Query(object):
     def resource(self, name):
         return self._update({"resource": name})
 
-    def method(self, name):
-        return self._update({"method": name})
+    def action(self, name):
+        return self._update({"action": name})
 
     @property
     def take(self):
@@ -176,9 +176,9 @@ class Query(object):
             kwargs[arg] = show
         return self._update({'take': kwargs}, copy=copy, level=level, merge=True)
 
-    def _call(self, method, record=None, field=None):
-        if self.state.get('method') != method:
-            return getattr(self.method(method), method)(
+    def _call(self, action, record=None, field=None):
+        if self.state.get('action') != action:
+            return getattr(self.action(action), action)(
                 record=record, field=field
             )
 
@@ -189,7 +189,7 @@ class Query(object):
                 args['record'] = record
             if field:
                 args['field'] = field
-            return getattr(self._update(args), method)()
+            return getattr(self._update(args), action)()
 
         return self.execute()
 

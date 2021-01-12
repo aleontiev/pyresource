@@ -16,3 +16,17 @@ class QueryExecutionError(Exception):
 class ExpressionValidationError(QueryValidationError):
     """Exception validating a query expression"""
     pass
+
+
+class SchemaResolverError(Exception):
+    """Exception resolving schema data from the ORM"""
+    pass
+
+class ResourceMisconfigured(QueryExecutionError):
+    """Exception caused by resource misconfiguration"""
+    pass
+
+
+class FieldMisconfigured(ResourceMisconfigured):
+    """Exception caused by field misconfiguration"""
+    pass

@@ -19,13 +19,11 @@ class Space(Resource):
             "url": {
                 "type": "string",
                 "source": {
-                    "join": {
-                        "items": [
-                            "server.url",
-                            "name"
-                        ]
-                    },
-                    "separator": "/"
+                    "concat": [
+                        "server.url",
+                        "name",
+                        "'/'"
+                    ]
                 },
                 "can": {"set": False}
             },

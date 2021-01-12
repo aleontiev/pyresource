@@ -2,7 +2,7 @@ import re
 
 PAGE = 'page'
 INSPECT = 'inspect'
-METHOD = 'method'
+ACTION = 'method'
 TAKE = 'take'
 SORT = 'sort'
 GROUP = 'group'
@@ -17,7 +17,7 @@ LEVELED_FEATURES = {
 }
 ROOT_FEATURES = {
     INSPECT,
-    METHOD
+    ACTION
 }
 FEATURES = LEVELED_FEATURES | ROOT_FEATURES
 

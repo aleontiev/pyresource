@@ -21,7 +21,7 @@ class Field(Resource):
                 "inverse": "fields"
             },
             "source": {
-                "type": ["null", "string", "object"]
+                "type": "any"
             },
             "inverse": {
                 'type': ["null", "string"]
@@ -37,9 +37,25 @@ class Field(Resource):
                     }
                 }]
             },
+            "description": {"type": ["null", "string"]},
+            "example": {
+                "type": "any"
+            },
             "type": {
                 "type": "type"
             },
+            "unique": {
+                "type": "boolean"
+            },
+            "index": {
+                "type": ["boolean", "string"]
+            },
+            "primary": {
+                "type": "boolean",
+            },
+            "default": {
+                "type": "any"
+            }
         }
 
     def __init__(self, *args, **kwargs):

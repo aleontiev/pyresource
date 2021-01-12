@@ -86,7 +86,7 @@ class IntegrationTestCase(TestCase):
 
         # 2c. change password
         # Request:
-        #     POST /api/test/users/1234?method=change-password {"data": {"old_password": "123", "new_password": "asd", "confirm_password": "asd"}}
+        #     POST /api/test/users/1234?action=change-password {"data": {"old_password": "123", "new_password": "asd", "confirm_password": "asd"}}
         # Success:
         #     200 {"data": "ok"}
         # Failure:
@@ -125,15 +125,15 @@ class IntegrationTestCase(TestCase):
         #         },
         #         "meta": {
         #             "page": {
-        #                 "data.users": {
+        #                 "users": {
         #                   "next": "/api/test?take.users=id,name&page.users=ABCDEF"
         #                   "records": 1000,
         #                   "limit": 100
         #                 },
-        #                 "data.groups": {
+        #                 "groups": {
         #                   "next": "/api/test?take.groups.users=id,name&take.groups=id,name&page.groups=ABCDEF",
         #                 },
-        #                 "data.groups.0.users": {
+        #                 "groups.0.users": {
         #                   "next": "/api/test/groups/12345/users?take=id,name&page=ABCDEF",
         #                   "limit": 10
         #                 }
@@ -142,8 +142,9 @@ class IntegrationTestCase(TestCase):
         #     }
 
         server = Server(
-            url='http://localhost/api',
+            url='http://localhost/api/',
         )
+
         test = Space(name='test', server=server)
 
         def login(resource, request, query):
@@ -161,6 +162,7 @@ class IntegrationTestCase(TestCase):
         session = Resource(
             id='test.session',
             name='session',
+            space=test,
             singleton=True,
             can={
                 'login': True,
@@ -173,19 +175,27 @@ class IntegrationTestCase(TestCase):
             fields={
                 "user": {
                     "type": ["null", "@users"],
-                    "source": ".request.user_id"
+                    "source": ".request.user.id"
                 },
-                "username": {
-                    "type": "string",
-                    "can": {"login": True, "get": False}
-                },
-                "password": {
-                    "type": "string",
-                    "can": {"login": True, "get": False}
-                }
             },
-            methods={
-                'login': login,
+            actions={
+                'login': {
+                    'method': login,
+                    'fields': {
+                        "username": {
+                            "type": "string",
+                            "can": {"get": False}
+                        },
+                        "password": {
+                            "type": "string",
+                            "can": {"get": False}
+                        },
+                        "status": {
+                            "type": "string",
+                            "can": {"set": False}
+                        }
+                    }
+                },
                 'logout': logout
             }
         )
@@ -198,29 +208,31 @@ class IntegrationTestCase(TestCase):
                 'id': 'id',
                 'name': 'name',
                 'users': {
-                    'source': 'users',
-                    'inverse': 'groups',
                     'lazy': True,
-                    'can': {
-                        'set': False,
-                        'delete': False
-                    }
+                    'can': {'set': False}
                 },
                 'created': {
-                    'source': 'created',
                     'can': {'set': False}
                 },
                 'updated': {
-                    'source': 'updated',
                     'can': {'set': False}
                 }
+            },
+            can={
+                '*': {'true': '.request.user.is_superuser'},
+                'get': {'in': ['.request.user.id', 'users']},
             }
         )
 
         users = Resource(
             id='test.users',
             name='users',
-            source='test.user',
+            source={
+                'model': 'test.user',
+                'where': {
+                    'true': 'is_active'
+                }
+            },
             space=test,
             fields={
                 'id': 'id',
@@ -228,65 +240,27 @@ class IntegrationTestCase(TestCase):
                 'last_name': 'last_name',
                 'name': {
                     'source': {
-                        'join': {
-                            'items': [
-                                'first_name',
-                                'last_name'
-                            ],
-                            'separator': ' '
-                        }
+                        'concat': [
+                            'first_name',
+                            '" "',
+                            'last_name'
+                        ]
                     },
-                    'can': {
-                        'set': False,
-                        'delete': False
-                    }
+                    'can': {'set': False}
                 },
                 'email': 'email',
                 'groups': {
-                    'source': 'groups',
-                    'inverse': 'users',
                     'lazy': True,
                     'can': {
-                        'set': False,
-                        'delete': False
+                        'set': {'=': ['.query.action', '"add"']},
+                        'add': True,
+                        'prefetch': True
                     }
                 },
-                'old_password': {
-                    'type': 'string',
-                    'can': {'get': False, 'set': False, 'change-password': True}
-                },
-                'new_password': {
-                    'type': {
-                        'type': 'string',
-                        'min_length': 10,
-                    },
-                    'can': {'get': False, 'set': False, 'change-password': True}
-                },
-                'confirm_password': {
-                    'type': 'string',
-                    'can': {'get': False, 'set': False, 'change-password': True}
-                }
             },
             can={
-                'get': {
-                    'or': [{
-                        '=': [
-                            'id', 'request.user_id'
-                        ]
-                    }, {
-                        'in': [
-                            'request.user_id', 'users'
-                        ]
-                    }, {
-                        '=': ['request.is_superuser', True]
-                    }]
-                },
-                'inspect': True,
-                'add': {'=': ['request.is_superuser', True]},
-                'set': {'=': ['request.is_superuser', True]},
-                'edit': {'=': ['request.is_superuser', True]},
-                'delete': {'=': ['request.is_superuser}', True]},
-                'change-password': {'=': ['id', 'request.user_id']}
+                '*': {'true': '.request.user.is_superuser'},
+                'get, change-password': {'=': ['id', '.request.user.id']}
             },
             before={
                 'change-password': {
@@ -298,26 +272,52 @@ class IntegrationTestCase(TestCase):
                     }
                 }
             },
-            methods={
-                'change-password': change_password,
+            actions={
+                'change-password': {
+                    'method': change_password,
+                    'fields': {
+                        'old_password': {
+                            'type': 'string',
+                            'can': {'get': False}
+                        },
+                        'new_password': {
+                            'type': {
+                                'type': 'string',
+                                'min_length': 10,
+                            },
+                            'can': {'get': False}
+                        },
+                        'confirm_password': {
+                            'type': 'string',
+                            'can': {'get': False}
+                        },
+                        'changed': {
+                            'type': 'boolean',
+                            'can': {'set': False}
+                        }
+                    }
+                }
             }
         )
         self.assertEqual(users.id, 'test.users')
         self.assertEqual(users.space.name, 'test')
         self.assertEqual(users.space, test)
+        self.assertEqual(server.url, 'http://localhost/api/')
+        self.assertEqual(test.url, 'http://localhost/api/test/')
+        self.assertEqual(users.url, 'http://localhost/api/test/users/')
 
         query1 = test.query(
             'users'
             '?take=id,name'
             '&page:size=10'
-            '&method=get'
+            '&action=get'
         )
         query2 = (
             test.query
             .resource('users')
             .take('id', 'name')
             .page(size=10)
-            .method('get')
+            .action('get')
         )
         self.assertEqual(query1.state, query2.state)
 

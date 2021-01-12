@@ -1,12 +1,14 @@
 from .expression import execute
 from .utils import as_dict, cached_property
 from .store import Store
+from .exceptions import SchemaResolverError, ResourceMisconfigured
 
 
 class Resource(object):
     class Schema:
         id = "resources"
         name = "resources"
+        source = None
         description = "A complex API type composed of many fields"
         space = "."
         can = {"get": True, "inspect": True}
@@ -20,9 +22,25 @@ class Resource(object):
                 "description": "Identifies the resource within the server",
                 "example": "resources",
             },
+            "source": {
+                "type": "any",
+                "description": "Null, string, or object",
+                "example": {
+                    "source": "auth.user",
+                    "where": {
+                        "=": ["is_active", True]
+                    }
+                }
+            },
             "url": {
                 "type": "string",
-                "source": "{fields.space.url}/{fields.name}",
+                "source": {
+                    "concat": [
+                        'space.url',
+                        'name',
+                        "'/'",
+                    ]
+                },
                 "can": {"set": False}
             },
             "name": {
@@ -65,7 +83,7 @@ class Resource(object):
                         },
                     ]
                 },
-                "description": "A map from method name to access rule",
+                "description": "A map from action name to access rule",
                 "example": {
                     "get": True,
                     "clone.record": {
@@ -242,18 +260,21 @@ class Resource(object):
                 # may need self.space to resolve field type
                 # for foreign key fields
                 space = self.space
-            field = resolver.get_field_schema(
-                self.source,
-                field,
-                space=space
-            )
-            source = schema.get('source')
 
-            if not source:
-                raise AttributeError(f'{key} field has no source')
-
+            source = self.get_meta('source')
             resource_id = self.get_meta('id')
             id = f"{resource_id}.{key}"
+
+            try:
+                field = resolver.get_field_schema(
+                    source,
+                    field,
+                    space=space
+                )
+            except SchemaResolverError as e:
+                exc = str(e)
+                raise FieldMisconfigured(f'{id}: {exc}')
+
             self._fields[key] = Field.make(
                 parent=self,
                 resource=resource_id,
