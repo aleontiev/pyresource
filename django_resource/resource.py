@@ -230,6 +230,13 @@ class Resource(object):
             return default
 
     @cached_property
+    def fields_by_name(self):
+        result = {}
+        for record in self.fields:
+            result[record.name] = record
+        return result
+
+    @cached_property
     def data(self):
         from django_resource.django.store import DjangoStore
         return DjangoStore(self)
@@ -346,7 +353,7 @@ class Resource(object):
         base = self.url
         patterns = [base]
         for field in self.fields:
-            patterns.append(f'{base}{field.name}')
+            patterns.append(f'{base}{field.name}/')
         return patterns
 
 def is_resolved(x):
