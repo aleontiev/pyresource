@@ -8,6 +8,8 @@ from django_resource.server import Server
 
 
 class IntegrationTestCase(TestCase):
+    maxDiff = None
+
     def test_version(self):
         self.assertEqual(__version__, '0.1.0')
 
@@ -145,7 +147,7 @@ class IntegrationTestCase(TestCase):
             url='http://localhost/api/',
         )
 
-        test = Space(name='test', server=server)
+        tests = Space(name='tests', server=server)
 
         def login(resource, request, query):
             api_key = query.state('body').get('api_key')
@@ -160,9 +162,9 @@ class IntegrationTestCase(TestCase):
             pass
 
         session = Resource(
-            id='test.session',
+            id='tests.session',
             name='session',
-            space=test,
+            space=tests,
             singleton=True,
             can={
                 'login': True,
@@ -200,10 +202,10 @@ class IntegrationTestCase(TestCase):
             }
         )
         groups = Resource(
-            id='test.groups',
+            id='tests.groups',
             name='groups',
-            source='test.groups',
-            space=test,
+            source='tests.group',
+            space=tests,
             fields={
                 'id': 'id',
                 'name': 'name',
@@ -220,25 +222,26 @@ class IntegrationTestCase(TestCase):
             },
             can={
                 '*': {'true': '.request.user.is_superuser'},
-                'get': {'in': ['.request.user.id', 'users']},
+                'get': {'=': ['users', '.request.user.id']},
             }
         )
 
         users = Resource(
-            id='test.users',
+            id='tests.users',
             name='users',
             source={
-                'model': 'test.user',
+                'model': 'tests.user',
                 'where': {
                     'true': 'is_active'
                 }
             },
-            space=test,
+            space=tests,
             fields={
                 'id': 'id',
                 'first_name': 'first_name',
                 'last_name': 'last_name',
                 'name': {
+                    'type': 'string',
                     'source': {
                         'concat': [
                             'first_name',
@@ -299,21 +302,21 @@ class IntegrationTestCase(TestCase):
                 }
             }
         )
-        self.assertEqual(users.id, 'test.users')
-        self.assertEqual(users.space.name, 'test')
-        self.assertEqual(users.space, test)
+        self.assertEqual(users.id, 'tests.users')
+        self.assertEqual(users.space.name, 'tests')
+        self.assertEqual(users.space, tests)
         self.assertEqual(server.url, 'http://localhost/api/')
-        self.assertEqual(test.url, 'http://localhost/api/test/')
-        self.assertEqual(users.url, 'http://localhost/api/test/users/')
+        self.assertEqual(tests.url, 'http://localhost/api/tests/')
+        self.assertEqual(users.url, 'http://localhost/api/tests/users/')
 
-        query1 = test.query(
+        query1 = tests.query(
             'users'
             '?take=id,name'
             '&page:size=10'
             '&action=get'
         )
         query2 = (
-            test.query
+            tests.query
             .resource('users')
             .take('id', 'name')
             .page(size=10)
@@ -321,19 +324,19 @@ class IntegrationTestCase(TestCase):
         )
         self.assertEqual(query1.state, query2.state)
 
-        query3 = test.query(
+        query3 = tests.query(
             '?take.users=*,-name'
             '&take.groups=id'
             '&page.users:size=5'
-            '&page.users=ABC'
+            '&page.users:after=ABC'
             '&sort.groups=-created,id'
             '&where.groups:updated:gte=created'
             '&where.users:name:contains="Joe"'
         )
         query4 = (
-            test.query
+            tests.query
             .take.users('*', '-name')
-            .page.users('ABC', size=5)
+            .page.users(after='ABC', size=5)
             .take.groups('id')
             .sort.groups('-created', 'id')
             .where.groups({'gte': ['updated', 'created']})
@@ -353,7 +356,7 @@ class IntegrationTestCase(TestCase):
                 },
                 'users': {
                     'page': {
-                        'cursor': 'ABC',
+                        'after': 'ABC',
                         'size': 5
                     },
                     'take': {
@@ -365,18 +368,23 @@ class IntegrationTestCase(TestCase):
                     }
                 }
             },
-            'space': 'test'
+            'space': 'tests'
         })
 
-        query5 = test.query(
+        query5 = tests.query(
             '/users/1/groups'
             '?take=id,name'
         )
         query6 = (
-            test.query
+            tests.query
             .resource('users')
             .record('1')
             .field('groups')
             .take('id', 'name')
         )
         self.assertEqual(query5.state, query6.state)
+        id = users.get_field('id')
+        self.assertEqual(id.resource, users)
+
+        import pdb
+        pdb.set_trace()

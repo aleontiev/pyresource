@@ -1,4 +1,4 @@
-from django.utils.functional import cached_property
+from .utils import cached_property
 from .resource import Resource
 from .version import version
 
@@ -304,6 +304,13 @@ Response:
         self._setup = False
 
     @cached_property
+    def spaces_by_name(self):
+        result = {}
+        for space in self.spaces:
+            result[space.name] = space
+        return result
+
+    @cached_property
     def root(self):
         from .space import Space
 
@@ -341,12 +348,12 @@ Response:
         self._setup = True
 
     @cached_property
-    def urlpatterns(self):
-        return self.get_urlpatterns()
+    def urls(self):
+        return self.get_urls()
 
-    def get_urlpatterns(self):
+    def get_urls(self):
         patterns = []
         self.setup()
         for space in self.spaces:
-            patterns.extend(space.get_urlpatterns())
+            patterns.extend(space.urls)
         return patterns

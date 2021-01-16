@@ -1,5 +1,6 @@
 from .resource import Resource
-from .types import get_link, get_type_name, get_type_names
+from .utils import cached_property
+from .types import get_link, get_type_name, get_type_names, get_type_property
 from collections import defaultdict
 from decimal import Decimal
 
@@ -60,9 +61,17 @@ class Space(Resource):
         if self._by_source is None:
             self._by_source = defaultdict(list)
             for resource in self.resources:
-                if resource.source and isinstance(resource.source, str):
-                    self._by_source.append(resource)
+                if resource.source:
+                    source = resource.source
+                    if isinstance(source, dict):
+                        source = source['model']
+                    self._by_source[source].append(resource)
         return self._by_source
+
+    @property
+    def space(self):
+        # return root space
+        return self.server.root
 
     def get_resource_for(self, source):
         resources = self.by_source[source]
@@ -89,7 +98,10 @@ class Space(Resource):
                 if key == self.name:
                     return self
                 else:
-                    raise Exception(f'Invalid {name} key: {key}')
+                    space = self.server.spaces_by_name.get(key)
+                    if not space:
+                        raise Exception(f'Invalid spaces key: "{key}"')
+                    return space
             if name == 'resources':
                 if key == 'server':
                     return self.server.as_record(space=self)
@@ -101,7 +113,16 @@ class Space(Resource):
                     return Type.as_record(space=self)
                 if key == 'resources':
                     return Resource.as_record(space=self)
-                raise Exception(f'Invalid {name} key: {key}')
+                if '.' in key:
+                    try:
+                        space_id, resource_name = key.split('.')
+                    except Exception:
+                        raise Exception(f'Invalid resources key: "{key}"')
+                    space = self.resolve_record('spaces', space_id)
+                    resource = space.resources_by_name.get(resource_name)
+                    if not resource:
+                        raise Exception(f'Invalid resources key: "{key}"')
+                    return resource
             if name == 'types':
                 return Type.get_base_type(
                     key,
@@ -196,8 +217,19 @@ class Space(Resource):
                 )
         return value
 
-    def get_urlpatterns(self):
+    @cached_property
+    def resources_by_name(self):
+        result = {}
+        for resource in self.resources:
+            result[resource.name] = resource
+        return result
+
+    @cached_property
+    def urls(self):
+        return self.get_urls()
+
+    def get_urls(self):
         patterns = []
         for resource in self.resources:
-            patterns.extend(resource.get_urlpatterns())
+            patterns.extend(resource.urls)
         return patterns

@@ -68,14 +68,24 @@ class Field(Resource):
         if not self._setup:
             # set initial value via parent
             source = self.get_option('source')
+            type = self.get_option('type')
+            name = self.get_option('name')
+            id = self.get_option('id')
             if source:
                 # get value from source expression
                 value = self.get_from_source(source)
             else:
                 # get value from parent by name
-                name = self.get_option('name')
                 default = self.get_option('default')
                 value = self.parent.get_option(name, default)
+
+            # transform field spec dict into field array
+            if (
+                id == 'resources.fields'
+                and isinstance(value, dict)
+            ):
+                value = [self.parent.get_field(name) for name in value]
+
             self.set_value(value)
 
     def get_from_source(self, source):
@@ -97,6 +107,10 @@ class Field(Resource):
         else:
             return self._value
 
+    @property
+    def space(self):
+        return self.get_space()
+
     def get_space(self):
         space = None
         parent = self.parent
@@ -113,6 +127,7 @@ class Field(Resource):
                 space = parent.get_option('space')
                 if not is_resolved(space):
                     space = parent.space
+                space = space.server.root
             elif parent_name == 'spaces':
                 space = parent
             elif parent_name == 'types':
@@ -126,13 +141,13 @@ class Field(Resource):
         if is_resolved(value):
             return value
 
-        return self.get_space().resolve(self.type, value)
+        return self.space.resolve(self.type, value)
 
     def validate(self, type, value):
         try:
             return validate(type, value)
         except TypeValidationError as e:
-            print(f"{self.name} validation failed: {e}")
+            print(f"Field {self.id} validation failed: {e}")
             raise
 
     def set_value(self, value, set_inverse=True):
@@ -174,7 +189,7 @@ class Field(Resource):
         inverse = self.inverse
 
         for v in value:
-            inverse_field = v.get_field(inverse)
+            inverse_field = v.get_schema_field(inverse)
             if inverse_field._is_list:
                 inverse_field.add_value(parent, set_inverse=False)
             else:

@@ -40,3 +40,20 @@ def merge(source, dest):
             # else: merge a boolean and dict together as the dict
 
     return dest
+
+
+def type_add_null(null, other):
+    """Naybe add null to a JSONSChema type"""
+    if not null:
+        return other
+    if isinstance(other, list):
+        if 'null' not in other:
+            other.append('null')
+        return other
+    elif isinstance(other, dict):
+        return {'anyOf': [{'type': 'null'}, other]}
+    elif isinstance(other, str):
+        # string
+        return ['null', other]
+    else:
+        raise ValueError(f'Bad type: {other}')

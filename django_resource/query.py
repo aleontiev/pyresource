@@ -94,6 +94,11 @@ class Query(object):
         if not executor:
             raise QueryExecutionError(f'Query cannot execute without executor')
         action_name = self.state.get('action', 'get')
+
+        if 'action' not in self.state:
+            # add default action "get" into state
+            self.state['action'] = action_name
+
         action = getattr(self.executor, action_name, None)
         if not action:
             raise QueryValidationError(f'Invalid action "{action_name}"')
@@ -102,6 +107,34 @@ class Query(object):
     @property
     def state(self):
         return self._state
+
+    def get_state(self, level=None):
+        """Get state at a particular level
+
+        If level is None, the root state will be returned
+        Otherwise, the level is used as a key to traverse the state
+
+        For example, if state = {"take": {"users": {"take": {"groups": True}}}
+        and level = "users", result = {"take": {"groups": True}}
+        and level = "users.groups", result = True
+        """
+        state = self.state
+        if not level:
+            return state
+        parts = level.split('.')
+        for index, part in enumerate(parts):
+            if 'take' not in state:
+                raise QueryValidationError(
+                    f'Invalid level: "{level}" at part "{part}" ({index})'
+                )
+            take = state['take']
+            if part not in take:
+                raise QueryValidationError(
+                    f'Invalid level: "{level}" at part "{part}" ({index})'
+                )
+
+            state = take[part]
+        return state
 
     # features
 
@@ -162,7 +195,7 @@ class Query(object):
             # cursor arg
             if isinstance(args, list):
                 args = args[0]
-            kwargs['cursor'] = args
+            kwargs['after'] = args
 
         return self._update({"page": kwargs}, copy=copy, level=level, merge=True)
 

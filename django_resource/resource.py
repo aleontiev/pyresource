@@ -1,7 +1,6 @@
 from .expression import execute
 from .utils import as_dict, cached_property
-from .store import Store
-from .exceptions import SchemaResolverError, ResourceMisconfigured
+from .exceptions import SchemaResolverError, ResourceMisconfigured, FieldMisconfigured
 
 
 class Resource(object):
@@ -173,19 +172,20 @@ class Resource(object):
 
         self._setup = False
         self._options = options
+        self._schema = {}
         self._fields = {}
 
     def __getattr__(self, key):
         if key.startswith("_"):
             return self.__dict__.get(key, None)
 
-        return self.get_field(key).get_value()
+        return self.get_schema_field(key).get_value()
 
     def __setattr__(self, key, value):
         if key.startswith("_"):
             return super(Resource, self).__setattr__(key, value)
 
-        field = self.get_field(key)
+        field = self.get_schema_field(key)
         field.set_value(value)
 
     def _get_property(self, key):
@@ -206,7 +206,7 @@ class Resource(object):
         for i, key in enumerate(keys):
             is_last = i == last
             if key:
-                field = value.get_field(key)
+                field = value.get_schema_field(key)
                 if not is_last:
                     value = field.get_value()
         return field
@@ -231,40 +231,58 @@ class Resource(object):
 
     @cached_property
     def data(self):
-        return Store(self)
+        from django_resource.django.store import DjangoStore
+        return DjangoStore(self)
 
     @property
     def query(self):
         return self.data.query
 
     @classmethod
-    def get_fields(cls):
+    def get_schema_fields(cls):
         return cls.Schema.fields
+
+    def get_schema_field(self, key):
+        from .field import Field
+        if key not in self._schema:
+            fields = self.get_schema_fields()
+            if key not in fields:
+                raise AttributeError(f"{key} is not a valid property of {self}")
+
+            field = fields[key]
+            resource_id = self.get_meta('id')
+            id = f"{resource_id}.{key}"
+
+            self._schema[key] = Field.make(
+                parent=self,
+                resource=resource_id,
+                id=id,
+                name=key,
+                **field
+            )
+        return self._schema[key]
 
     def get_field(self, key):
         from .field import Field
-
-        fields = self.get_fields()
         if key not in self._fields:
-            if key not in fields:
-                this = str(self)
-                raise AttributeError(f"{key} is not a valid field of {this}")
+            fields = self.get_option('fields')
+            if not fields or key not in fields:
+                raise AttributeError(f"{key} is not a valid field of {self}")
 
             field = fields[key]
+            resource_id = self.get_option('id')
+            id = f"{resource_id}.{key}"
             resolver = self.data.resolver
-            # self.source: the model's source
-            # schema: the field's source
-
             space = None
             if isinstance(field, str) or 'type' not in field:
                 # may need self.space to resolve field type
                 # for foreign key fields
                 space = self.space
+            if isinstance(field, dict) and 'source' not in field:
+                # add source as name
+                field['source'] = key
 
-            source = self.get_meta('source')
-            resource_id = self.get_meta('id')
-            id = f"{resource_id}.{key}"
-
+            source = self.get_option('source')
             try:
                 field = resolver.get_field_schema(
                     source,
@@ -287,7 +305,7 @@ class Resource(object):
     @classmethod
     def as_record(cls, **kwargs):
         id = cls.get_meta("id")
-        fields = cls.get_fields()
+        fields = cls.get_schema_fields()
         options = cls.get_meta()
         options["fields"] = ["{}.{}".format(id, key) for key in fields.keys()]
         for key, value in kwargs.items():
@@ -298,7 +316,7 @@ class Resource(object):
         if getattr(self, "_id_field", None):
             return self._id_field
 
-        for name, field in self.get_fields().items():
+        for name, field in self.get_schema_fields().items():
             if isinstance(field, dict) and field.get("primary", False):
                 self._id_field = name
                 return name
@@ -319,13 +337,17 @@ class Resource(object):
             return as_dict(cls.Schema)
         return getattr(cls.Schema, key, default)
 
-    def get_urlpatterns(self):
-        """Get Django urlpatterns for this resource"""
-        base = f'{self.space.server.url}/{self.space.name}/{self.name}'
-        patterns = [base]
-        for field in self.get_fields().keys():
-            patterns.append(f'{base}/{field}')
+    @cached_property
+    def urls(self):
+        return self.get_urls()
 
+    def get_urls(self):
+        """Get Django urlpatterns for this resource"""
+        base = self.url
+        patterns = [base]
+        for field in self.fields:
+            patterns.append(f'{base}{field.name}')
+        return patterns
 
 def is_resolved(x):
     if isinstance(x, Resource):
