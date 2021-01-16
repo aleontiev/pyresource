@@ -20,6 +20,13 @@ class Resource(object):
                 "type": "string",
                 "description": "Identifies the resource within the server",
                 "example": "resources",
+                "default": {
+                    "concat": [
+                        'space.name',
+                        '"."',
+                        'name'
+                    ]
+                }
             },
             "source": {
                 "type": "any",
@@ -167,29 +174,34 @@ class Resource(object):
         return f"({self.__class__.__name__}: {id})"
 
     def __init__(self, **options):
+        # initialization is lazy; arguments are saved and nothing else
+
         # make sure there is a schema and a name
         assert self.Schema.name is not None
-
+        # setup: whether or not this instance has been "setup" (actual initialization)
         self._setup = False
+        # options: the initial options 
         self._options = options
-        self._schema = {}
+        # attributes: map of local attributes (using Field class)
+        self._attributes = {}
+        # fields: map of resource fields (using Field class)
         self._fields = {}
 
     def __getattr__(self, key):
         if key.startswith("_"):
             return self.__dict__.get(key, None)
 
-        return self.get_schema_field(key).get_value()
+        return self.get_attribute(key).get_value()
 
     def __setattr__(self, key, value):
         if key.startswith("_"):
             return super(Resource, self).__setattr__(key, value)
 
-        field = self.get_schema_field(key)
+        field = self.get_attribute(key)
         field.set_value(value)
 
     def _get_property(self, key):
-        """Get field at given key (supporting.nested.paths)
+        """Get attribute (Field) at given key (supporting.nested.paths)
 
         Raises:
             ValueError if key is not valid
@@ -206,7 +218,7 @@ class Resource(object):
         for i, key in enumerate(keys):
             is_last = i == last
             if key:
-                field = value.get_schema_field(key)
+                field = value.get_attribute(key)
                 if not is_last:
                     value = field.get_value()
         return field
@@ -217,6 +229,9 @@ class Resource(object):
     def get_property(self, key=None):
         return self._get_property(key).get_value(resolve=False, id=True)
 
+    def has_option(self, key):
+        return key in self._options
+
     def get_option(self, key, default=None):
         if key in self._options:
             return self._options[key]
@@ -226,7 +241,7 @@ class Resource(object):
                 default = default(self)
             elif isinstance(default, dict):
                 # expression that takes self
-                default, _ = execute(default, self)
+                default, _ = execute(default, {'fields': self})
             return default
 
     @cached_property
@@ -246,13 +261,13 @@ class Resource(object):
         return self.data.query
 
     @classmethod
-    def get_schema_fields(cls):
+    def get_attributes(cls):
         return cls.Schema.fields
 
-    def get_schema_field(self, key):
+    def get_attribute(self, key):
         from .field import Field
-        if key not in self._schema:
-            fields = self.get_schema_fields()
+        if key not in self._attributes:
+            fields = self.get_attributes()
             if key not in fields:
                 raise AttributeError(f"{key} is not a valid property of {self}")
 
@@ -260,14 +275,14 @@ class Resource(object):
             resource_id = self.get_meta('id')
             id = f"{resource_id}.{key}"
 
-            self._schema[key] = Field.make(
+            self._attributes[key] = Field.make(
                 parent=self,
                 resource=resource_id,
                 id=id,
                 name=key,
                 **field
             )
-        return self._schema[key]
+        return self._attributes[key]
 
     def get_field(self, key):
         from .field import Field
@@ -277,7 +292,7 @@ class Resource(object):
                 raise AttributeError(f"{key} is not a valid field of {self}")
 
             field = fields[key]
-            resource_id = self.get_option('id')
+            resource_id = self.get_id()
             id = f"{resource_id}.{key}"
             resolver = self.data.resolver
             space = None
@@ -286,7 +301,7 @@ class Resource(object):
                 # for foreign key fields
                 space = self.space
             if isinstance(field, dict) and 'source' not in field:
-                # add source as name
+                # add the name as the source
                 field['source'] = key
 
             source = self.get_option('source')
@@ -312,31 +327,34 @@ class Resource(object):
     @classmethod
     def as_record(cls, **kwargs):
         id = cls.get_meta("id")
-        fields = cls.get_schema_fields()
+        fields = cls.get_attributes()
         options = cls.get_meta()
         options["fields"] = ["{}.{}".format(id, key) for key in fields.keys()]
         for key, value in kwargs.items():
             options[key] = value
         return Resource(**options)
 
-    def get_id_field(self):
-        if getattr(self, "_id_field", None):
-            return self._id_field
+    def get_id_attribute(self):
+        if getattr(self, "_id_attribute", None):
+            return self._id_attribute
 
-        for name, field in self.get_schema_fields().items():
+        for name, field in self.get_attributes().items():
             if isinstance(field, dict) and field.get("primary", False):
-                self._id_field = name
+                self._id_attribute = name
                 return name
 
         raise ValueError(f"Resource {self.name} has no primary key")
 
     def get_id(self):
-        id_field = self.get_id_field()
-        return (
-            getattr(self, id_field)
-            if id_field in self._fields
-            else self.get_option(id_field)
-        )
+        id_attribute = self.get_id_attribute()
+        if id_attribute in self._attributes:
+            return getattr(self, id_attribute)
+
+        attribute = self.get_attributes()[id_attribute]
+        default = None
+        if isinstance(attribute, dict):
+            default = attribute.get('default', None)
+        return self.get_option(id_attribute, default)
 
     @classmethod
     def get_meta(cls, key=None, default=None):

@@ -37,6 +37,17 @@ class Field(Resource):
                     }
                 }]
             },
+            "url": {
+                "type": "string",
+                "source": {
+                    "concat": [
+                        'resource.url',
+                        'name',
+                        "'/'",
+                    ]
+                },
+                "can": {"set": False}
+            },
             "description": {"type": ["null", "string"]},
             "example": {
                 "type": "any"
@@ -71,6 +82,7 @@ class Field(Resource):
             type = self.get_option('type')
             name = self.get_option('name')
             id = self.get_option('id')
+
             if source:
                 # get value from source expression
                 value = self.get_from_source(source)
@@ -129,7 +141,7 @@ class Field(Resource):
                     space = parent.space
                 space = space.server.root
             elif parent_name == 'spaces':
-                space = parent
+                space = parent.server.root
             elif parent_name == 'types':
                 space = parent.server.root
         else:
@@ -189,7 +201,7 @@ class Field(Resource):
         inverse = self.inverse
 
         for v in value:
-            inverse_field = v.get_schema_field(inverse)
+            inverse_field = v.get_attribute(inverse)
             if inverse_field._is_list:
                 inverse_field.add_value(parent, set_inverse=False)
             else:
