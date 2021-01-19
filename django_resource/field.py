@@ -56,13 +56,20 @@ class Field(Resource):
                 "type": "type"
             },
             "unique": {
-                "type": "boolean"
+                "type": "boolean",
+                "default": False
+            },
+            "lazy": {
+                "type": "boolean",
+                "default": False
             },
             "index": {
-                "type": ["boolean", "string"]
+                "type": ["boolean", "string"],
+                "default": False
             },
             "primary": {
                 "type": "boolean",
+                "default": False
             },
             "default": {
                 "type": "any"

@@ -36,6 +36,10 @@ class FilterError(Exception):
     pass
 
 
+class SerializationError(Exception):
+    pass
+
+
 class RequestError(Exception):
     pass
 

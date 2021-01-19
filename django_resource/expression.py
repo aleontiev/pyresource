@@ -2,14 +2,6 @@ import re
 from .utils import resolve, get
 
 
-def resolve_expression(expression, context):
-    while isinstance(expression, dict):
-        expression, resolved = execute(expression, context)
-        if not resolved:
-            break
-    return expression
-
-
 def get_expression(expression, context):
     if not expression:
         return expression
@@ -17,29 +9,15 @@ def get_expression(expression, context):
     if expression[0] == expression[-1] and expression[0] in {'"', "'"}:
         return expression[1:-1]
 
-    if not expression.startswith('fields.'):
+    if expression.startswith('.'):
+        # .request.user -> request.user
+        expression = expression[1:]
+    elif 'fields' in context and not expression.startswith('fields.'):
+        # name -> fields.name
         expression = f'fields.{expression}'
 
     expression = resolve(expression, context)
     return get(expression, context)
-
-
-def format_expression(expression, context):
-    if not expression:
-        return expression
-
-    expression = resolve_expression(expression, context)
-
-    if isinstance(expression, dict):
-        return {
-            format_expression(k, context): format_expression(v, context)
-            for k, v in expression.items()
-        }
-    elif isinstance(expression, list):
-        return [format_expression(v) for v in expression]
-    else:
-        expression = re.sub(r"{{\s*\.", "{{ self.", expression)
-        return resolve(expression, {"self": context})
 
 
 def join_expression(expression, context):
@@ -74,8 +52,6 @@ def value_expression(expression, context):
 
 methods = {
     "get": get_expression,
-    "format": format_expression,
-    "value": value_expression,
     "join": join_expression,
     "concat": join_expression
 }

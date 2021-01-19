@@ -1,4 +1,5 @@
 from django_resource.exceptions import FilterError
+from django_resource.utils import cached_property
 from .operators import compound_operators, query_operators
 
 
@@ -64,4 +65,6 @@ class DjangoFilter:
                         'Only binary/unary/simple callables are supported at this time'
                     )
 
+                if not isinstance(arguments, list):
+                    arguments = [arguments]
                 return method(*arguments)

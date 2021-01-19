@@ -304,7 +304,7 @@ class Query(object):
                 sub[key] = value
 
         if copy:
-            return Query(state=state)
+            return Query(state=state, executor=self.executor)
         else:
             return self
 

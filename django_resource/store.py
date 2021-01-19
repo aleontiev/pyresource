@@ -87,6 +87,23 @@ class Store:
             self.space = resource
         elif resource.__class__.__name__ == 'Resource':
             self.resource = resource
+        elif resource.__class__.__name__ == 'Server':
+            self.server = server
+
+    def get_space(self):
+        if self.resource:
+            return self.resource.space
+        elif self.space:
+            return self.space
+        else:
+            return None
+
+    def get_server(self):
+        if self.resource:
+            return self.resource.space.server
+        if self.space:
+            return self.space.server
+        return self.server
 
     def get_executor(self):
         raise NotImplementedError()

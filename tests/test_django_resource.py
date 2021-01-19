@@ -3,6 +3,7 @@ from django_resource import __version__
 from django_resource.space import Space
 from django_resource.resource import Resource
 from django_resource.server import Server
+from tests.models import User, Group, Location
 
 
 
@@ -249,7 +250,10 @@ class IntegrationTestCase(TestCase):
                             'last_name'
                         ]
                     },
-                    'can': {'set': False}
+                    'can': {
+                        'get': True,
+                        'set': False
+                    }
                 },
                 'email': 'email',
                 'groups': {
@@ -257,7 +261,7 @@ class IntegrationTestCase(TestCase):
                     'can': {
                         'set': {'=': ['.query.action', '"add"']},
                         'add': True,
-                        'prefetch': True
+                        'get': True,
                     }
                 },
             },
@@ -385,6 +389,50 @@ class IntegrationTestCase(TestCase):
         self.assertEqual(query5.state, query6.state)
         id = users.get_field('id')
         self.assertEqual(id.resource, users)
+        self.assertEqual(users.query.get(), {'data': []})
 
-        import pdb
-        pdb.set_trace()
+        user = User.make(last_name='leo')
+
+        get = users.query.get()
+        self.assertEqual(
+            get,
+            {
+                'data': [{
+                    'id': str(user.id),
+                    'email': 'email-1@test.com',
+                    'first_name': None,
+                    'last_name': 'leo',
+                    'name': None
+                }]
+            }
+        )
+
+        take_id_only = users.query.take('id').get()
+        self.assertEqual(
+            take_id_only,
+            {
+                'data': [{
+                    'id': str(user.id)
+                }]
+            }
+        )
+
+        dont_take_id = users.query.take('*', '-id').get()
+        self.assertEqual(
+            dont_take_id,
+            {
+                'data': [{
+                    'email': 'email-1@test.com',
+                    'first_name': None,
+                    'last_name': 'leo',
+                    'name': None
+                }]
+            }
+        )
+        take_nothing = users.query.take('-id').get()
+        self.assertEqual(
+            take_nothing,
+            {
+                'data': [{}]
+            }
+        )

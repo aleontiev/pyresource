@@ -327,6 +327,9 @@ Response:
             ],
         )
 
+    def get_resource_by_id(self, id):
+        return self.root.resolve_record('resources', id)
+
     def setup(self):
         if not self._setup:
             self.add("spaces", self.root)
