@@ -187,6 +187,11 @@ class Resource(object):
         # fields: map of resource fields (using Field class)
         self._fields = {}
 
+        if self.get_meta('id') == 'resources':
+            # resources trigger a binding with their space
+            # on initialization
+            assert self.space != None
+
     def __getattr__(self, key):
         if key.startswith("_"):
             return self.__dict__.get(key, None)
@@ -314,7 +319,6 @@ class Resource(object):
             except SchemaResolverError as e:
                 exc = str(e)
                 raise FieldMisconfigured(f'{id}: {exc}')
-
             self._fields[key] = Field.make(
                 parent=self,
                 resource=resource_id,

@@ -2,6 +2,7 @@ from django_resource.exceptions import SchemaResolverError
 
 from django.db import models
 from django.db.models.fields import NOT_PROVIDED
+from django.db.models.fields.related import ManyToManyRel
 
 from django.contrib.postgres import fields as postgres
 
@@ -22,7 +23,7 @@ class DjangoSchemaResolver(SchemaResolver):
         except TypeError:
             return None
 
-        default = field.default
+        default = getattr(field, 'default', None)
         if default == NOT_PROVIDED:
             default = None
         return default
@@ -72,13 +73,16 @@ class DjangoSchemaResolver(SchemaResolver):
         elif isinstance(field, (models.ForeignKey, models.OneToOneField)):
             if not space:
                 raise SchemaResolverError(f'Could not determine type for {field_name}, space is unknown')
-
-            related = space.get_resource_for(source)
+            related = field.related_model
+            related = '.'.join((related._meta.app_label, related._meta.model_name))
+            related = space.get_resource_for(related)
             return type_add_null(field.null, f'@{related.name}')
-        elif isinstance(field, models.ManyToManyField):
+        elif isinstance(field, (models.ManyToManyField, ManyToManyRel)):
             if not space:
                 raise SchemaResolverError(f'Could not determine type for {field_name}, space is unknown')
-            related = space.get_resource_for(source)
+            related = field.related_model
+            related = '.'.join((related._meta.app_label, related._meta.model_name))
+            related = space.get_resource_for(related)
             return {'type': 'array', 'items': f'@{related.name}'}
 
     def get_choices(self, source, field, space=None):
@@ -88,7 +92,7 @@ class DjangoSchemaResolver(SchemaResolver):
         except TypeError:
             return None
 
-        choices = field.choices
+        choices = getattr(field, 'choices', None)
         if not choices:
             return None
         return choices
@@ -101,9 +105,13 @@ class DjangoSchemaResolver(SchemaResolver):
         except TypeError:
             return None
 
-        doc = field.help_text
+        try:
+            doc = field.help_text
+        except AttributeError:
+            doc = None
+
         if not doc:
-            doc = str(field)
+            doc = None
         return doc
 
     def get_unique(self, source, field, space=None):
@@ -112,7 +120,7 @@ class DjangoSchemaResolver(SchemaResolver):
             field = self.get_field(model, field)
         except TypeError:
             return False
-        return field.unique
+        return getattr(field, 'unique', False)
 
     def get_primary(self, source, field, space=None):
         model = self.get_model(source)
@@ -120,7 +128,7 @@ class DjangoSchemaResolver(SchemaResolver):
             field = self.get_field(model, field)
         except TypeError:
             return False
-        return field.primary_key
+        return getattr(field, 'primary_key', False)
 
     def get_index(self, source, field, space=None):
         model = self.get_model(source)
@@ -128,7 +136,7 @@ class DjangoSchemaResolver(SchemaResolver):
             field = self.get_field(model, field)
         except TypeError:
             return False
-        return field.db_index
+        return getattr(field, 'db_index', False)
 
     def get_field(self, model, field, space=None):
         return model._meta.get_field(field)

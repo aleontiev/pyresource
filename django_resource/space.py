@@ -54,7 +54,10 @@ class Space(Resource):
         # ...for "types" (e.g. "any", "integer", "object")
         self._records = {}
         self._by_source = None
-        return super(Space, self).__init__(**kwargs)
+        result = super(Space, self).__init__(**kwargs)
+        # trigger a binding with server
+        assert self.server != None
+        return result
 
     @property
     def by_source(self):
@@ -77,7 +80,7 @@ class Space(Resource):
         resources = self.by_source[source]
         len_resources = len(resources)
         if len_resources == 0:
-            raise AttributeError('No resource for {source}')
+            raise AttributeError(f'Space {self.name}: no resource for {source}')
         elif len_resources >= 2:
             # TODO: list all matches
             raise AttributeError(

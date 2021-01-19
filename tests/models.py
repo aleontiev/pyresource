@@ -133,6 +133,7 @@ class User(MakeMixin, AbstractBaseUser):
     groups = models.ManyToManyField(
         Group,
         through='Membership',
+        related_name='users'
     )
     roles = models.TextField(
         null=True,
