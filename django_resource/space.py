@@ -2,6 +2,7 @@ from .resource import Resource
 from .utils import cached_property
 from .types import get_link, get_type_name, get_type_names, get_type_property
 from collections import defaultdict
+from .resolver import SchemaResolver
 from decimal import Decimal
 
 
@@ -59,15 +60,13 @@ class Space(Resource):
         assert self.server != None
         return result
 
-    @property
+    @cached_property
     def by_source(self):
         if self._by_source is None:
             self._by_source = defaultdict(list)
             for resource in self.resources:
                 if resource.source:
-                    source = resource.source
-                    if isinstance(source, dict):
-                        source = source['model']
+                    source = SchemaResolver.get_model_name(resource.source)
                     self._by_source[source].append(resource)
         return self._by_source
 

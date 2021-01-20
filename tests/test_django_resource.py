@@ -97,9 +97,12 @@ def get_fixture():
         id='tests.users',
         name='users',
         source={
-            'model': 'tests.user',
-            'where': {
-                'true': 'is_active'
+            'queryset': {
+                'model': 'tests.user',
+                'where': {
+                    'true': 'is_active'
+                },
+                'sort': 'created'
             }
         },
         space=tests,
@@ -127,6 +130,12 @@ def get_fixture():
                     'set': {'=': ['.query.action', '"add"']},
                     'add': True,
                     'get': True,
+                },
+                'source': {
+                    'queryset': {
+                        'field': 'groups',
+                        'sort': 'created'
+                    }
                 }
             },
             'created': {

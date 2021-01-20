@@ -6,7 +6,7 @@ from django.db.models.fields.related import ManyToManyRel
 
 from django.contrib.postgres import fields as postgres
 
-from django_resource.store import SchemaResolver
+from django_resource.resolver import SchemaResolver
 from django_resource.utils import type_add_null
 
 
@@ -139,6 +139,9 @@ class DjangoSchemaResolver(SchemaResolver):
         return getattr(field, 'db_index', False)
 
     def get_field(self, model, field, space=None):
+        if isinstance(field, dict) and field.get('queryset'):
+            queryset = field['queryset']
+            field = queryset.get('field')
         return model._meta.get_field(field)
 
     @classmethod
