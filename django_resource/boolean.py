@@ -1,5 +1,7 @@
 from tt import BooleanExpression
 from .exceptions import ExpressionValidationError
+from .utils import coerce_query_values, coerce_query_value
+
 
 NOT = 'not'
 AND = 'and'
@@ -69,3 +71,89 @@ def _build_expression(expression, mapping):
         }
     else:
         return mapping[symbol]
+
+
+class WhereQueryMixin:
+
+    @classmethod
+    def update_where(cls, query, leveled):
+        for level, wheres in leveled.items():
+            expression = 'and'
+            operands = {}
+            for i, where in enumerate(wheres):
+                num_parts = len(where)
+                with_level = f'.{level}' if level else ''
+                separator = ':'
+                with_remainder = separator + separator.join(where[:-1]) if num_parts > 1 else ''
+                original = f"where{with_level}{with_remainder}"
+                key = operand = None
+                if num_parts == 1:
+                    # where=a and b
+                    value = where[0]
+                    if len(value) > 1:
+                        value = ', '.join(value)
+                        raise QueryValidationError(
+                            f'Invalid where key "{original}", multiple values provided'
+                        )
+                    value = value[0]
+                    expression = value
+                elif num_parts == 2:
+                    # where:name=Joe
+                    # -> {"name": "Joe"}
+                    operand = {
+                        '=': [where[0], coerce_query_values(where[1], singletons=False)]
+                    }
+                    key = str(i)
+                elif num_parts == 3:
+                    # where:name:equals=Joe
+                    # -> {"equals": ["name", "Joe"]}}
+                    operand = {
+                        where[1]: [where[0], coerce_query_values(where[2], singletons=False)]
+                    }
+                    key = str(i)
+                elif num_parts == 4:
+                    # where:name:equals:tag=Joe
+                    operand = {
+                        where[1]: [
+                            where[0], coerce_query_values(where[3], singletons=False)
+                        ]
+                    }
+                    key = where[2]
+                    if key in BOOLEAN_OPERATORS:
+                        raise QueryValidationError(
+                            f'Invalid where key "{original}", using operator "{key}"'
+                        )
+                else:
+                    raise QueryValidationError(
+                        f'Invalid where key "{original}", too many segments'
+                    )
+                if operand and key:
+                    if key in operands:
+                        raise QueryValidationError(
+                            f'Invalid where keys, duplicate tags for "{key}"'
+                        )
+                    operands[key] = operand
+
+            values = list(operands.values())
+            if expression not in SIMPLE_EXPRESSIONS:
+                # expression specified, try to build it
+                update = build_expression(expression, operands)
+            else:
+                # no expression given, implicit AND
+                if len(values) == 1:
+                    # simplest case: just one condition
+                    update = values
+                else:
+                    # many conditions
+                    update = {expression: values}
+
+            if len(update) == 1:
+                update = update[0]
+
+            update = {'where': update}
+            query._update(
+                update,
+                level=level,
+                merge=False,
+                copy=False
+            )

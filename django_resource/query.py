@@ -2,6 +2,7 @@ from collections import defaultdict
 from urllib.parse import parse_qs
 from .utils import merge as _merge
 from copy import deepcopy
+from .utils import coerce_query_value, coerce_query_values
 from .exceptions import QueryValidationError, QueryExecutionError
 from .features import (
     get_feature,
@@ -13,52 +14,11 @@ from .features import (
     TAKE,
     SORT,
 )
-from .boolean import (
-    build_expression,
-    BOOLEAN_OPERATORS,
-    SIMPLE_EXPRESSIONS
-)
+from .boolean import WhereQueryMixin
 
 
-def coerce_query_value(value, singletons=True):
-    """Try to coerce to boolean, null, integer, float"""
-    if singletons:
-        # coerce to singleton values: boolean/null
 
-        lower = value.lower()
-        if lower == 'true':
-            return True
-
-        if lower == 'false':
-            return False
-
-        if lower == 'null':
-            return None
-
-    try:
-        value = int(value)
-    except ValueError:
-        pass
-    else:
-        return value
-
-    try:
-        value = float(value)
-    except ValueError:
-        pass
-    else:
-        return value
-
-    return value
-
-
-def coerce_query_values(values, singletons=True):
-    single = isinstance(values, list) and len(values) == 1
-    values = [coerce_query_value(value, singletons) for value in values]
-    return values[0] if single else values
-
-
-class Query(object):
+class Query(WhereQueryMixin):
     # methods
     def __init__(self, state=None, executor=None):
         """
@@ -165,10 +125,6 @@ class Query(object):
         return NestedFeature(self, 'page')
 
     @property
-    def where(self):
-        return NestedFeature(self, "where")
-
-    @property
     def sort(self):
         return NestedFeature(self, "sort")
 
@@ -225,18 +181,6 @@ class Query(object):
             return getattr(self._update(args), action)()
 
         return self.execute()
-
-    def _where(self, level, query, copy=True):
-        """
-        Example:
-            .where({
-                'or': [
-                    {'contains': ['users.location.name', '"New York"']},
-                    {'not': {'in': ['users', [1, 2]]}}
-                ]
-            })
-        """
-        return self._update({"where": query}, copy=copy, level=level)
 
     def _sort(self, level, *args, copy=True):
         """
@@ -310,89 +254,6 @@ class Query(object):
 
     def __getitem__(self, key):
         return self._state[key]
-
-    @classmethod
-    def _update_where(cls, query, leveled):
-        for level, wheres in leveled.items():
-            expression = 'and'
-            operands = {}
-            for i, where in enumerate(wheres):
-                num_parts = len(where)
-                with_level = f'.{level}' if level else ''
-                separator = ':'
-                with_remainder = separator + separator.join(where[:-1]) if num_parts > 1 else ''
-                original = f"where{with_level}{with_remainder}"
-                key = operand = None
-                if num_parts == 1:
-                    # where=a and b
-                    value = where[0]
-                    if len(value) > 1:
-                        value = ', '.join(value)
-                        raise QueryValidationError(
-                            f'Invalid where key "{original}", multiple values provided'
-                        )
-                    value = value[0]
-                    expression = value
-                elif num_parts == 2:
-                    # where:name=Joe
-                    # -> {"name": "Joe"}
-                    operand = {
-                        '=': [where[0], coerce_query_values(where[1], singletons=False)]
-                    }
-                    key = str(i)
-                elif num_parts == 3:
-                    # where:name:equals=Joe
-                    # -> {"equals": ["name", "Joe"]}}
-                    operand = {
-                        where[1]: [where[0], coerce_query_values(where[2], singletons=False)]
-                    }
-                    key = str(i)
-                elif num_parts == 4:
-                    # where:name:equals:tag=Joe
-                    operand = {
-                        where[1]: [
-                            where[0], coerce_query_values(where[3], singletons=False)
-                        ]
-                    }
-                    key = where[2]
-                    if key in BOOLEAN_OPERATORS:
-                        raise QueryValidationError(
-                            f'Invalid where key "{original}", using operator "{key}"'
-                        )
-                else:
-                    raise QueryValidationError(
-                        f'Invalid where key "{original}", too many segments'
-                    )
-                if operand and key:
-                    if key in operands:
-                        raise QueryValidationError(
-                            f'Invalid where keys, duplicate tags for "{key}"'
-                        )
-                    operands[key] = operand
-
-            values = list(operands.values())
-            if expression not in SIMPLE_EXPRESSIONS:
-                # expression specified, try to build it
-                update = build_expression(expression, operands)
-            else:
-                # no expression given, implicit AND
-                if len(values) == 1:
-                    # simplest case: just one condition
-                    update = values
-                else:
-                    # many conditions
-                    update = {expression: values}
-
-            if len(update) == 1:
-                update = update[0]
-
-            update = {'where': update}
-            query._update(
-                update,
-                level=level,
-                merge=False,
-                copy=False
-            )
 
     @classmethod
     def _build_update(cls, parts, key, value):
@@ -486,5 +347,23 @@ class Query(object):
                 copy=False
             )
         if where:
-            cls._update_where(result, where)
+            # WhereQueryMixin
+            # special handling
+            cls.update_where(result, where)
         return result
+
+    @property
+    def where(self):
+        return NestedFeature(self, "where")
+
+    def _where(self, level, query, copy=True):
+        """
+        Example:
+            .where({
+                'or': [
+                    {'contains': ['users.location.name', '"New York"']},
+                    {'not': {'in': ['users', [1, 2]]}}
+                ]
+            })
+        """
+        return self._update({"where": query}, copy=copy, level=level)

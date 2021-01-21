@@ -69,3 +69,41 @@ def type_add_null(null, other):
         return ["null", other]
     else:
         raise ValueError(f"Bad type: {other}")
+
+
+def coerce_query_value(value, singletons=True):
+    """Try to coerce to boolean, null, integer, float"""
+    if singletons:
+        # coerce to singleton values: boolean/null
+
+        lower = value.lower()
+        if lower == "true":
+            return True
+
+        if lower == "false":
+            return False
+
+        if lower == "null":
+            return None
+
+    try:
+        value = int(value)
+    except ValueError:
+        pass
+    else:
+        return value
+
+    try:
+        value = float(value)
+    except ValueError:
+        pass
+    else:
+        return value
+
+    return value
+
+
+def coerce_query_values(values, singletons=True):
+    single = isinstance(values, list) and len(values) == 1
+    values = [coerce_query_value(value, singletons) for value in values]
+    return values[0] if single else values
