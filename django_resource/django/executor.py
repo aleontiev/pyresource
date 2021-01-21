@@ -1,27 +1,46 @@
 from django_resource.executor import Executor
-from django_resource.resolver import RequestResolver
+from django_resource.resolver import RequestResolver, SchemaResolver
 from django_resource.exceptions import (
     Forbidden,
     FilterError,
     ResourceMisconfigured,
     SerializationError,
+    QueryValidationError
 )
 from .filters import DjangoFilter
+from django_resource.utils import set_dict
 from django_resource.conf import settings
 
 
 class DjangoExecutor(Executor):
     @classmethod
+    def get_sorts(cls, resource, sorts):
+        if isinstance(sorts, str):
+            sorts = [sorts]
+
+        if not sorts:
+            return None
+        return sorts
+
+    @classmethod
     def get_filters(cls, resource, where, query=None, request=None):
-        """Build `django.db.models.Q` object for a queryset"""
-        # e.g.
-        # where = {"or": [{'=': ['.request.user.id', 'id']}, {'>=': ['created', {'now': {}}]}]
-        # filters = Q(id=123) | Q(created__gte=Now())
+        """Build `django.db.models.Q` object for a queryset
+
+        For example:
+
+        request.user.id = 123
+        where = {
+            "or": [
+                {'=': ['.request.user.id', 'id']},
+                {'>=': ['created', {'now': {}}
+            ]
+        }
+        return = Q(id=123) | Q(created__gte=Now())
+        """
         if not where:
             return None
 
         where = RequestResolver.resolve(where, query=query, request=request)
-
         filters = DjangoFilter(where)
         try:
             return filters.value
@@ -31,84 +50,175 @@ class DjangoExecutor(Executor):
             )
 
     @classmethod
-    def add_queryset_sorts(cls, resource, queryset, query, request=None, **context):
+    def add_queryset_sorts(
+        cls, resource, fields, queryset, query, request=None, level=None, **context
+    ):
         """Add .order_by"""
+        source = resource.source
+        request_sorts = default_sorts = None
+        if isinstance(source, dict):
+            qs = source.get("queryset")
+            sort = qs.get("sort", None)
+            default_sorts = cls.get_sorts(resource, sort,)
+
+        state = query.get_state(level)
+        sort = state.get("sort", None)
+        if sort:
+            request_sorts = cls.get_sorts(resource, sort)
+
+        # order by request sorts, or by default sorts
+        if request_sorts:
+            queryset = queryset.order_by(*request_sorts)
+        elif default_sorts:
+            queryset = queryset.order_by(*default_sorts)
         return queryset
 
     @classmethod
-    def add_queryset_filters(cls, resource, queryset, query, request=None, **context):
+    def add_queryset_filters(
+        cls, resource, fields, queryset, query, request=None, level=None, **context
+    ):
         """Add .filter"""
+        source = resource.source
+        request_filters = default_filters = None
+        if isinstance(source, dict):
+            qs = source.get("queryset")
+            where = qs.get("where", None)
+            default_filters = cls.get_filters(
+                resource, where, query=query, request=request
+            )
+
+        state = query.get_state(level)
+        where = state.get("where", None)
+        if where:
+            request_filters = cls.get_filters(
+                resource, where, query=query, request=request
+            )
+
+        if default_filters:
+            queryset = queryset.filter(default_filters)
+
+        if request_filters:
+            queryset = queryset.filter(request_filters)
         return queryset
 
     @classmethod
-    def add_queryset_prefetches(cls, resource, queryset, query, request=None, **context):
+    def add_queryset_prefetches(
+        cls, resource, fields, queryset, query, request=None, level=None, **context
+    ):
         """Add .prefetch_related"""
         return queryset
 
     @classmethod
-    def add_queryset_annotations(cls, resource, queryset, query, request=None, **context):
+    def add_queryset_annotations(
+        cls, resource, fields, queryset, query, request=None, level=None, **context
+    ):
         """Add .annotate"""
         return queryset
 
     @classmethod
-    def add_queryset_aggregations(cls, resource, queryset, query, request=None, **context):
-        """Add .aggregate"""
+    def add_queryset_pagination(
+        cls, resource, fields, queryset, query, request=None, level=None, **context
+    ):
+        """Add pagination"""
+        state = query.get_state(level)
+        page = state.get('page', {})
+        size = int(page.get('size', settings.DEFAULT_PAGE_SIZE))
+        after = page.get('after', None)
+        offset = 0
+        if after:
+            try:
+                after = cls.decode_cursor(after)
+            except Exception:
+                raise QueryValidationError(f'page:after is invalid: {after}')
+
+            if 'offset' in after:
+                # offset-pagination
+                # after = {'offset': 100}
+                offset = after['offset']
+                queryset = queryset[offset:offset+size+1]
+            elif 'after' in after:
+                # keyset-pagination
+                # after = {'after': {'id': 1, 'name': 'test', ...}}
+                # only ordered fields are included
+                filters = {
+                    f'{key}__gt': value for key, value in after['after'].items()
+                }
+                queryset = queryset.filter(**filters)[:size+1]
+            else:
+                raise QueryValidationError('page:after is invalid: {after}')
+        else:
+            # if there is no offset/keyset yet, just add the LIMIT
+            queryset = queryset[:size+1]
+
         return queryset
 
     @classmethod
-    def add_queryset_pagination(cls, resource, queryset, query, request=None, **context):
-        """Add limit/PK filter"""
+    def add_queryset_fields(
+        cls, resource, fields, queryset, query, request=None, level=None, **context
+    ):
+        """Add .only"""
+        only = set()
+
+        for field in fields:
+            source = SchemaResolver.get_field_source(field.source)
+            if source is None:
+                # ignore fields without a source name i.e. real underlying field
+                continue
+            if '.' in source:
+                # for a nested source like a.b.c, return the first field: a
+                source = source.split('.')[0]
+            only.add(source)
+
+        if only:
+            only = list(only)
+            queryset = queryset.only(*only)
         return queryset
 
     @classmethod
-    def add_queryset_fields(cls, resource, queryset, query, request=None, **context):
-        """Add .only/.defer"""
+    def add_queryset_distinct(
+        cls, resource, fields, queryset, query, level=None, request=None, **context
+    ):
+        """Add .distinct if the query has left/outer joins"""
+        has_joins = False
+        for join in queryset.query.alias_map.values():
+            if join.join_type and join.join_type != 'INNER JOIN':
+                has_joins = True
+                break
+        if has_joins:
+            queryset = queryset.distinct()
         return queryset
 
     @classmethod
-    def add_queryset_distinct(cls, resource, queryset, query, request=None, **context):
-        """Add .distinct if the query has left joins"""
-        return queryset
-
-    @classmethod
-    def get_queryset(cls, resolver, resource, query, request=None, **context):
-        queryset = cls.get_queryset_base(resolver, resource, query, request=request, **context)
+    def get_queryset(
+        cls, resolver, resource, fields, query, request=None, level=None, **context
+    ):
+        queryset = cls.get_queryset_base(resolver, resource)
         for add in (
-            "sorts",
             "filters",
+            "sorts",
             "prefetches",
             "annotations",
-            "aggregations",
-            "pagination",
             "fields",
             "distinct",
+            "pagination",
         ):
             queryset = getattr(cls, f"add_queryset_{add}")(
-                resource, queryset, query, request=request, **context
+                resource,
+                fields,
+                queryset,
+                query,
+                request=request,
+                level=level,
+                **context,
             )
+        # print(str(queryset.query))
         return queryset
 
     @classmethod
-    def get_queryset_base(cls, resolver, resource, query, request=None, **context):
+    def get_queryset_base(
+        cls, resolver, resource
+    ):
         source = resource.source
-        if isinstance(source, dict):
-            queryset = source.get('queryset')
-            where = queryset.get("where", None)
-            sort = queryset.get('sort', None)
-            source = queryset.get("model", None)
-            if not source:
-                raise ResourceMisconfigured(
-                    f"{resource.id}: no model in source: {source}"
-                )
-            filters = cls.get_filters(
-                resource,
-                where,
-                query=query,
-                request=request
-            )
-        else:
-            filters = None
-
         try:
             model = resolver.get_model(source)
         except SchemaResolverError as e:
@@ -116,16 +226,7 @@ class DjangoExecutor(Executor):
                 f'{resource.id}: failed to resolve model from source "{source}"\n'
                 f"Error: {e}"
             )
-
-        if filters:
-            try:
-                queryset = model.objects.filter(filters)
-            except Exception as e:
-                raise ResourceMisconfigured(f"{resource.id}: cannot apply base filters")
-        else:
-            queryset = model.objects.all()
-
-        return queryset
+        return model.objects.all()
 
     def get_resource(self, query, request=None, **context):
         resource = self.store.resource
@@ -134,9 +235,12 @@ class DjangoExecutor(Executor):
             raise Forbidden()
 
         source = resource.source
-        page_size = query.state.get("page", {}).get("size", settings.DEFAULT_PAGE_SIZE)
+        page_size = int(query.state.get("page", {}).get("size", settings.DEFAULT_PAGE_SIZE))
         meta = {}
 
+        fields = self.select_fields(
+            resource, action="get", query=query, request=request,
+        )
         if not source:
             # no source -> do not use queryset
             if not resource.singleton:
@@ -145,7 +249,13 @@ class DjangoExecutor(Executor):
                 )
             # singleton -> assume fields are all computed
             # e.g. user_id with source: ".request.user.id"
-            data = self.serialize(resource, query=query, request=request, meta=meta)
+            data = self.serialize(
+                resource,
+                fields,
+                query=query,
+                request=request,
+                meta=meta
+            )
         else:
             resolver = self.store.resolver
             if resource.singleton:
@@ -158,55 +268,38 @@ class DjangoExecutor(Executor):
                         f"{resource.id}: could not locate record for singleton resource"
                     )
                 data = self.serialize(
-                    resource, query=query, request=request, record=record, meta=meta
+                    resource,
+                    fields,
+                    query=query,
+                    request=request,
+                    record=record,
+                    meta=meta,
                 )
             else:
-                queryset = self.get_queryset(resolver, resource, query, request=request, **context)
+                queryset = self.get_queryset(
+                    resolver, resource, fields, query, request=request, **context
+                )
                 records = list(queryset)
                 num_records = len(records)
-                if num_records > page_size:
-                    # TODO: add pagination links to "meta"
+                if num_records and num_records > page_size:
+                    cursor = self.get_next_page(query)
+                    set_dict(
+                        meta,
+                        'page.data', {
+                            'after': cursor,
+                        }
+                    )
                     records = records[:page_size]
                 data = self.serialize(
-                    resource, record=records, query=query, request=request, meta=meta
+                    resource,
+                    fields,
+                    record=records,
+                    query=query,
+                    request=request,
+                    meta=meta,
                 )
 
         result = {"data": data}
         if meta:
             result["meta"] = meta
         return result
-
-    def get_record(self, query, request=None, **context):
-        resource = self.store.resource
-
-        can = self.can(resource, "get.record", query=query, request=request)
-        if not can:
-            raise Forbidden()
-
-        queryset = self.get_queryset(resource, query, request=request, can=can, **context)
-        record = queryset.first()
-        meta = {}
-        data = self.serialize(
-            resource, record=record, query=query, request=request, meta=meta
-        )
-        result = {"data": data}
-        if meta:
-            result["meta"] = meta
-        return result
-
-    def get_field(self, query, request=None, **context):
-        resource = self.store.resource
-
-        if not self.can(resource, "get.field", query, request):
-            raise Forbidden()
-
-        if query.state.get("take"):
-            # use get_related to return related data
-            # this requires "prefetch" permission on this field
-            # or "get.prefetch" permission on the related field
-            return self.get_related(query, request=request, **context)
-
-        queryset = self.get_queryset(resource, query, request=request, **context)
-
-    def get_related(self, query, request=None, **context):
-        pass  # TODO

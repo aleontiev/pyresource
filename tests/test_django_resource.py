@@ -1,3 +1,5 @@
+import base64
+import json
 from django.test import TestCase
 from django_resource import __version__
 from django_resource.space import Space
@@ -69,7 +71,14 @@ def get_fixture():
     groups = Resource(
         id='tests.groups',
         name='groups',
-        source='tests.group',
+        source={
+            'queryset': {
+                'model': 'tests.group',
+                'where': {
+                    'true': 'is_active'
+                }
+            }
+        },
         space=tests,
         fields={
             'id': 'id',
@@ -134,7 +143,10 @@ def get_fixture():
                 'source': {
                     'queryset': {
                         'field': 'groups',
-                        'sort': 'created'
+                        'sort': 'created',
+                        'where': {
+                            'true': 'is_active'
+                        }
                     }
                 }
             },
@@ -212,6 +224,12 @@ class IntegrationTestCase(TestCase):
         # - location 
         # one singleton:
         # - session (for authentication)
+
+        # mvp tests for:
+        # - setup: initializing a server/space/resource/field
+        # - actions: get/add/edit/set/delete on resource/record/field endpoints
+        # - features: where/sort/page/take features
+
         fixture = get_fixture()
         users = fixture['users']
         groups = fixture['groups']
@@ -462,11 +480,83 @@ class IntegrationTestCase(TestCase):
             }
         )
 
-        # ordered
-        # filtered
-        # paginated
-        # add
-        # set
-        # edit
-        # delete
-        # custom methods
+        get_where = (
+            users.query
+            .take('id')
+            .where({
+                'contains': ['first_name', f'"{userA.first_name}"']
+            })
+            .get()
+        )
+        self.assertEqual(
+            get_where,
+            {
+                'data': [{
+                    'id': str(userA.id)
+                }]
+            }
+        )
+
+        get_where_related = (
+            users.query
+            .take('id')
+            .where({
+                'null': 'groups'
+            })
+            .get()
+        )
+        self.assertEqual(
+            get_where_related,
+            {
+                'data': []
+            }
+        )
+
+        sort_descending = users.query.take('id').sort('-last_name').get()
+        self.assertEqual(
+            sort_descending,
+            {
+                'data': [{
+                    'id': str(userB.id)
+                }, {
+                    'id': str(userA.id)
+                }]
+            }
+        )
+
+        page_1 = users.query.take('id').page(size=1).get()
+        after = base64.b64encode(json.dumps({'offset': 1}).encode('utf-8'))
+        self.assertEqual(
+            page_1,
+            {
+                'data': [{
+                    'id': str(userA.id)
+                }],
+                'meta': {
+                    'page': {
+                        'data': {
+                            'after': after,
+                        }
+                    }
+                }
+            }
+        )
+        page_2 = users.query.take('id').page(size=1, after=after).get()
+        self.assertEqual(
+            page_2,
+            {
+                'data': [{
+                    'id': str(userB.id)
+                }]
+            }
+        )
+
+        # advanced features:
+        # - pagination
+        # - inspecting metadata
+        # - space & server endpoints
+        # - deep filtering
+        # - computed fields
+        # - hooks
+        # - authorization
+        # - custom methods

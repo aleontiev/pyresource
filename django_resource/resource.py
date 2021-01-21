@@ -173,6 +173,9 @@ class Resource(object):
         id = self.get_id()
         return f"({self.__class__.__name__}: {id})"
 
+    def __hash__(self):
+        return hash(str(self))
+
     def __init__(self, **options):
         # initialization is lazy; arguments are saved and nothing else
 
@@ -338,6 +341,14 @@ class Resource(object):
             options[key] = value
         return Resource(**options)
 
+    @cached_property
+    def id_field(self):
+        for field in self.fields:
+            if field.primary:
+                return field.name
+
+        raise ValueError(f"Resource {self.id} has no primary key field")
+
     def get_id_attribute(self):
         if getattr(self, "_id_attribute", None):
             return self._id_attribute
@@ -347,7 +358,7 @@ class Resource(object):
                 self._id_attribute = name
                 return name
 
-        raise ValueError(f"Resource {self.name} has no primary key")
+        raise ValueError(f"Resource {self.id} has no ID attribute")
 
     def get_id(self):
         id_attribute = self.get_id_attribute()

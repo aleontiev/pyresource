@@ -103,6 +103,7 @@ class Group(MakeMixin, models.Model):
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
     name = models.TextField()
+    is_active = models.BooleanField(default=True)
 
 
 class Membership(MakeMixin, models.Model):

@@ -149,6 +149,7 @@ class DjangoSchemaResolver(SchemaResolver):
         if not source:
             raise SchemaResolverError('Invalid source (empty)')
 
+        source = cls.get_model_source(source)
         models = cls._models
         if source not in models:
             # resolve model at this time if provided, throwing an error

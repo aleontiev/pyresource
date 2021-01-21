@@ -66,7 +66,7 @@ class Space(Resource):
             self._by_source = defaultdict(list)
             for resource in self.resources:
                 if resource.source:
-                    source = SchemaResolver.get_model_name(resource.source)
+                    source = SchemaResolver.get_model_source(resource.source)
                     self._by_source[source].append(resource)
         return self._by_source
 

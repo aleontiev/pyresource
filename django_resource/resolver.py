@@ -11,17 +11,25 @@ class SchemaResolver:
     META_FIELDS = {}
 
     @classmethod
-    def get_model_name(cls, source):
-        if isinstance(source, dict):
+    def get_field_source(self, source):
+        if isinstance(source, str):
+            return source
+        if isinstance(source, dict) and 'queryset' in source:
+            queryset = source['queryset']
+            return queryset.get('field')
+        return None
+
+    @classmethod
+    def get_model_source(cls, source):
+        if isinstance(source, str):
+            return source
+        if isinstance(source, dict) and 'queryset' in source:
             queryset = source.get('queryset', {})
-            model = queryset.get('model', None)
-            if model:
-                return model
-            raise SchemaResolverError(f'Source has no model: {source}')
-        return source
+            return queryset.get('model')
+        return None
 
     def get_field_schema(self, source, field, space=None):
-        source_model = SchemaResolver.get_model_name(source)
+        source_model = SchemaResolver.get_model_source(source)
         if isinstance(field, dict):
             schema = field
         else:

@@ -109,8 +109,6 @@ lt = make_query_operator('lt', inverse='gte')
 lte = make_query_operator('lte', inverse='gt')
 eq = make_query_operator('exact')
 ne = make_query_operator('exact', transform=not_)
-isnull = make_query_operator('isnull', can_invert=False)
-not_null = make_query_operator('isnull', can_invert=False, transform=not_)
 contains = make_query_operator('contains', can_invert=False)
 not_contains = make_query_operator('contains', can_invert=False, transform=not_)
 icontains = make_query_operator('icontains', can_invert=False)
@@ -119,6 +117,8 @@ in_ = make_query_operator('in', can_invert=False)
 not_in = make_query_operator('in', can_invert=False, transform=not_)
 range_ = make_query_operator('range', can_invert=False)
 not_range = make_query_operator('range', can_invert=False, transform=not_)
+isnull = make_query_operator('isnull', num_args=1, value=True, can_invert=False)
+not_null = make_query_operator('isnull', num_args=1, value=False, can_invert=False, transform=not_)
 true = make_query_operator('exact', num_args=1, value=True, can_invert=False)
 false = make_query_operator('exact', num_args=1, value=False, can_invert=False)
 
@@ -141,9 +141,11 @@ query_operators = {
     '-in': not_in,
     'range': range_,
     '-range': not_range,
+    'not.range': not_range,
     'isnull': isnull,
     'null': isnull,
     '-null': not_null,
+    'not.null': not_null,
     'contains': contains,
     '-contains': not_contains,
     'icontains': icontains,

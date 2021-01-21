@@ -1,3 +1,6 @@
+import base64
+import json
+
 from .exceptions import SerializationError
 from .conf import settings
 from .utils import get
@@ -23,8 +26,36 @@ class Executor:
             return self.get_record(query, request=request, **context)
         elif state.get("resource"):
             return self.get_resource(query, request=request, **context)
+        elif state.get('space'):
+            return self.get_space(query, request=request, **context)
         else:
-            raise QueryExecutionError("space execution is not supported")
+            return self.get_server(query, request=request, **context)
+
+    @classmethod
+    def decode_cursor(self, cursor):
+        return json.loads(base64.b64decode(cursor.decode('utf-8')))
+
+    @classmethod
+    def encode_cursor(self, cursor):
+        return base64.b64encode(json.dumps(cursor).encode('utf-8'))
+
+    @classmethod
+    def get_next_page(cls, query, offset=None, level=None):
+        state = query.get_state(level)
+        page = state.get('page', {})
+        size = int(page.get('size', settings.DEFAULT_PAGE_SIZE))
+        page = page.get('after', None)
+        if page is not None:
+            page = cls.decode_cursor(page)
+
+        # offset-limit pagination
+        if offset is None:
+            offset = size
+        if page is None:
+            next_offset = offset
+        else:
+            next_offset = page.get('offset', 0) + offset
+        return cls.encode_cursor({'offset': next_offset})
 
     @classmethod
     def resolve_resource(cls, base_resource, name):
@@ -38,6 +69,8 @@ class Executor:
             raise SerializationError(f'Resource "{name}" not found')
         return resource
 
+    # TODO: @cache results by all arguments to avoid recomputing this across different phases
+    # of the same request (e.g. serialization and query building)
     @classmethod
     def select_fields(
         cls, resource, action, level=None, query=None, request=None
@@ -52,8 +85,6 @@ class Executor:
             record: a Django model instance
             request: a Django Request object
         """
-        # TODO: cache result by all arguments
-        # this allows serialization and get_queryset to re-use the same field definitions
         result = []
         fields = resource.fields
         state = query.get_state(level=level)
@@ -71,6 +102,23 @@ class Executor:
                 continue
             result.append(field)
         return result
+
+    @classmethod
+    def can(cls, resource, action, query=None, request=None):
+        """Whether or not the given action is authorized
+
+        Arguments:
+            resource: a Resource
+            action: an endpoint-qualified string action (e.g. "get.resource")
+            query: a Query
+            request: a Django request
+        Returns:
+            True: the action is authorized for all records
+            False: the action is not authorized
+            dict: the action may be authorized for some records
+                e.g: {'true': 'is_active'}
+        """
+        return True  # TODO
 
     @classmethod
     def can_take_field(cls, field, action, query=None, request=None):
@@ -156,11 +204,12 @@ class Executor:
     def serialize(
         cls,
         resource,
+        fields,
         record=None,
         query=None,
         level=None,
         request=None,
-        meta=None
+        meta=None,
     ):
         """Deep serialization
 
@@ -175,13 +224,6 @@ class Executor:
         Returns:
             Serialized representation of record or list of records
         """
-        fields = cls.select_fields(
-            resource,
-            action="get",
-            level=level,
-            query=query,
-            request=request,
-        )
         results = []
         state = query.get_state(level)
         page_size = state.get("page", {}).get("size", settings.DEFAULT_PAGE_SIZE)
@@ -203,22 +245,18 @@ class Executor:
                 # dict-type source indicates a computed field (e.g. concat of 2 fields)
                 source = field.source if isinstance(field.source, str) else name
                 context = {"fields": record, "request": request, "query": query.state}
-                if isinstance(source, dict):
-                    # get from context
-                    value = execute(source, context)
+                if record:
+                    # get from record provided
+                    value = get(source, record)
                 else:
-                    if record:
-                        # get from record provided
-                        value = get(source, record)
+                    # get from context (request/query data)
+                    if source.startswith("."):
+                        source = source[1:]
                     else:
-                        # get from context (request/query data)
-                        if source.startswith("."):
-                            source = source[1:]
-                        else:
-                            raise SerializationError(
-                                f"Source {source} must start with . because no record"
-                            )
-                        value = get(source, context)
+                        raise SerializationError(
+                            f"Source {source} must start with . because no record"
+                        )
+                    value = get(source, context)
 
                 if hasattr(value, "all") and callable(value.all):
                     # account for Django many-related managers
@@ -236,9 +274,9 @@ class Executor:
                             )
                         related = cls.resolve_resource(resource, link)
                         if level is None:
-                            next_level = name
+                            related_level = name
                         else:
-                            next_level = f"{level}.{name}"
+                            related_level = f"{level}.{name}"
 
                         if isinstance(value, list):
                             if len(value) > page_size:
@@ -246,12 +284,20 @@ class Executor:
                                 # and do not render the next element
                                 value = value[:page_size]
 
+                        related_fields = cls.select_fields(
+                            related,
+                            action="get",
+                            level=related_level,
+                            query=query,
+                            request=request,
+                        )
                         value = cls.serialize(
                             related,
+                            related_fields,
+                            level=related_level,
                             record=value,
                             query=query,
                             request=request,
-                            level=next_level,
                             meta=meta,
                         )
                     else:
@@ -269,7 +315,3 @@ class Executor:
         if not as_list:
             results = results[0]
         return results
-
-    @classmethod
-    def can(cls, resource, action, query=None, request=None):
-        return True  # TODO

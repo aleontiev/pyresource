@@ -8,10 +8,22 @@ def resolve(template, context):
     return template.render(context)
 
 
+def set_dict(target, template, value):
+    parts = template.split(".") if isinstance(template, str) else template
+    num_parts = len(parts)
+    for i, part in enumerate(parts):
+        if part not in target:
+            target[part] = {}
+        if i == num_parts - 1:
+            target[part] = value
+        else:
+            target = target[part]
+
+
 def get(template, context):
     if not template or not context:
         return None
-    parts = template.split('.') if isinstance(template, str) else template
+    parts = template.split(".") if isinstance(template, str) else template
     part = parts[0]
     if isinstance(context, dict):
         next_context = context.get(part, None)
@@ -25,7 +37,7 @@ def get(template, context):
 
 
 def as_dict(obj):
-    return {k: v for k, v in obj.__dict__.items() if not k.startswith('_')}
+    return {k: v for k, v in obj.__dict__.items() if not k.startswith("_")}
 
 
 def merge(source, dest):
@@ -47,13 +59,13 @@ def type_add_null(null, other):
     if not null:
         return other
     if isinstance(other, list):
-        if 'null' not in other:
-            other.append('null')
+        if "null" not in other:
+            other.append("null")
         return other
     elif isinstance(other, dict):
-        return {'anyOf': [{'type': 'null'}, other]}
+        return {"anyOf": [{"type": "null"}, other]}
     elif isinstance(other, str):
         # string
-        return ['null', other]
+        return ["null", other]
     else:
-        raise ValueError(f'Bad type: {other}')
+        raise ValueError(f"Bad type: {other}")
