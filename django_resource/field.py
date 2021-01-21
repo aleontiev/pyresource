@@ -2,80 +2,13 @@ from .utils import cached_property
 from .types import is_link, is_list, validate
 from .resource import Resource, is_resolved
 from .expression import execute
+from .schemas import FieldSchema
 from .exceptions import TypeValidationError
 
 
 class Field(Resource):
-    class Schema:
-        id = "fields"
-        name = "fields"
-        space = "."
-        description = "Description of fields"
-        fields = {
-            "id": {
-                "type": "string",
-                "primary": True,
-            },
-            "resource": {
-                "type": "@resources",
-                "inverse": "fields"
-            },
-            "source": {
-                "type": "any"
-            },
-            "inverse": {
-                'type': ["null", "string"]
-            },
-            "name": {"type": "string"},
-            "can": {
-                "type": [{
-                    "type": "object",
-                }, {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }]
-            },
-            "url": {
-                "type": "string",
-                "source": {
-                    "concat": [
-                        'resource.url',
-                        'name',
-                        "'/'",
-                    ]
-                },
-                "can": {"set": False}
-            },
-            "description": {"type": ["null", "string"]},
-            "example": {
-                "type": "any"
-            },
-            "type": {
-                "type": "type"
-            },
-            "unique": {
-                "type": "boolean",
-                "default": False
-            },
-            "lazy": {
-                "type": "boolean",
-                "default": False
-            },
-            "index": {
-                "type": ["boolean", "string"],
-                "default": False
-            },
-            "primary": {
-                "type": "boolean",
-                "default": False
-            },
-            "default": {
-                "type": "any"
-            }
-        }
-
+    class Schema(FieldSchema):
+        pass
     def __init__(self, *args, **kwargs):
         super(Field, self).__init__(*args, **kwargs)
         type = self.get_option('type')

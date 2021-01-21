@@ -1,47 +1,16 @@
+from collections import defaultdict
+from decimal import Decimal
+
 from .resource import Resource
 from .utils import cached_property
 from .types import get_link, get_type_name, get_type_names, get_type_property
-from collections import defaultdict
 from .resolver import SchemaResolver
-from decimal import Decimal
+from .schemas import SpaceSchema
 
 
 class Space(Resource):
-    class Schema:
-        id = "spaces"
-        name = "spaces"
-        description = "spaces description"
-        space = "."
-        can = ["read", "inspect"]
-        fields = {
-            "server": {
-                "type": "@server",
-                "inverse": "spaces"
-            },
-            "url": {
-                "type": "string",
-                "source": {
-                    "concat": [
-                        "server.url",
-                        "name",
-                        "'/'"
-                    ]
-                },
-                "can": {"set": False}
-            },
-            "name": {
-                "type": "string",
-                "primary": True
-            },
-            "resources": {
-                "type": {
-                    "type": "array",
-                    "items": "@resources"
-                },
-                "inverse": "space",
-                "default": []
-            },
-        }
+    class Schema(SpaceSchema):
+        pass
 
     def __init__(self, **kwargs):
         if kwargs.get("space", None) == ".":

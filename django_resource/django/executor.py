@@ -5,7 +5,7 @@ from django_resource.exceptions import (
     FilterError,
     ResourceMisconfigured,
     SerializationError,
-    QueryValidationError
+    QueryValidationError,
 )
 from .filters import DjangoFilter
 from django_resource.utils import set_dict
@@ -17,6 +17,9 @@ class DjangoExecutor(Executor):
     def get_sorts(cls, resource, sorts):
         if isinstance(sorts, str):
             sorts = [sorts]
+
+        # TODO: add id sort if there is no sort
+        # to enable keyset pagination
 
         if not sorts:
             return None
@@ -55,22 +58,20 @@ class DjangoExecutor(Executor):
     ):
         """Add .order_by"""
         source = resource.source
-        request_sorts = default_sorts = None
+        sorts = None
         if isinstance(source, dict):
             qs = source.get("queryset")
             sort = qs.get("sort", None)
-            default_sorts = cls.get_sorts(resource, sort,)
+            sorts = cls.get_sorts(resource, sort)
 
         state = query.get_state(level)
         sort = state.get("sort", None)
         if sort:
-            request_sorts = cls.get_sorts(resource, sort)
+            sorts = cls.get_sorts(resource, sort)
 
         # order by request sorts, or by default sorts
-        if request_sorts:
-            queryset = queryset.order_by(*request_sorts)
-        elif default_sorts:
-            queryset = queryset.order_by(*default_sorts)
+        if sorts:
+            queryset = queryset.order_by(*sorts)
         return queryset
 
     @classmethod
@@ -106,6 +107,7 @@ class DjangoExecutor(Executor):
         cls, resource, fields, queryset, query, request=None, level=None, **context
     ):
         """Add .prefetch_related"""
+        # look for take.foo and translate into Prefetch(queryset=...)
         return queryset
 
     @classmethod
@@ -117,39 +119,46 @@ class DjangoExecutor(Executor):
 
     @classmethod
     def add_queryset_pagination(
-        cls, resource, fields, queryset, query, request=None, level=None, **context
+        cls,
+        resource,
+        fields,
+        queryset,
+        query,
+        count=None,
+        request=None,
+        level=None,
+        **context,
     ):
         """Add pagination"""
         state = query.get_state(level)
-        page = state.get('page', {})
-        size = int(page.get('size', settings.DEFAULT_PAGE_SIZE))
-        after = page.get('after', None)
+        page = state.get("page", {})
+        size = int(page.get("size", settings.DEFAULT_PAGE_SIZE))
+        after = page.get("after", None)
         offset = 0
         if after:
             try:
                 after = cls.decode_cursor(after)
             except Exception:
-                raise QueryValidationError(f'page:after is invalid: {after}')
+                raise QueryValidationError(f"page:after is invalid: {after}")
 
-            if 'offset' in after:
+            if "offset" in after:
                 # offset-pagination
                 # after = {'offset': 100}
-                offset = after['offset']
-                queryset = queryset[offset:offset+size+1]
-            elif 'after' in after:
+                offset = after["offset"]
+                queryset = queryset[offset : offset + size + 1]
+            elif "after" in after:
                 # keyset-pagination
                 # after = {'after': {'id': 1, 'name': 'test', ...}}
                 # only ordered fields are included
-                filters = {
-                    f'{key}__gt': value for key, value in after['after'].items()
-                }
-                queryset = queryset.filter(**filters)[:size+1]
-            else:
-                raise QueryValidationError('page:after is invalid: {after}')
-        else:
-            # if there is no offset/keyset yet, just add the LIMIT
-            queryset = queryset[:size+1]
+                filters = {f"{key}__gt": value for key, value in after["after"].items()}
 
+                queryset = queryset.filter(**filters)
+            else:
+                raise QueryValidationError("page:after is invalid: {after}")
+
+        if count is not None:
+            count['total'] = queryset.count()
+        queryset = queryset[: size + 1]
         return queryset
 
     @classmethod
@@ -164,9 +173,9 @@ class DjangoExecutor(Executor):
             if source is None:
                 # ignore fields without a source name i.e. real underlying field
                 continue
-            if '.' in source:
+            if "." in source:
                 # for a nested source like a.b.c, return the first field: a
-                source = source.split('.')[0]
+                source = source.split(".")[0]
             only.add(source)
 
         if only:
@@ -181,7 +190,7 @@ class DjangoExecutor(Executor):
         """Add .distinct if the query has left/outer joins"""
         has_joins = False
         for join in queryset.query.alias_map.values():
-            if join.join_type and join.join_type != 'INNER JOIN':
+            if join.join_type and join.join_type != "INNER JOIN":
                 has_joins = True
                 break
         if has_joins:
@@ -190,7 +199,15 @@ class DjangoExecutor(Executor):
 
     @classmethod
     def get_queryset(
-        cls, resolver, resource, fields, query, request=None, level=None, **context
+        cls,
+        resolver,
+        resource,
+        fields,
+        query,
+        request=None,
+        count=None,
+        level=None,
+        **context,
     ):
         queryset = cls.get_queryset_base(resolver, resource)
         for add in (
@@ -209,15 +226,14 @@ class DjangoExecutor(Executor):
                 query,
                 request=request,
                 level=level,
+                count=count,
                 **context,
             )
         # print(str(queryset.query))
         return queryset
 
     @classmethod
-    def get_queryset_base(
-        cls, resolver, resource
-    ):
+    def get_queryset_base(cls, resolver, resource):
         source = resource.source
         try:
             model = resolver.get_model(source)
@@ -235,7 +251,9 @@ class DjangoExecutor(Executor):
             raise Forbidden()
 
         source = resource.source
-        page_size = int(query.state.get("page", {}).get("size", settings.DEFAULT_PAGE_SIZE))
+        page_size = int(
+            query.state.get("page", {}).get("size", settings.DEFAULT_PAGE_SIZE)
+        )
         meta = {}
 
         fields = self.select_fields(
@@ -250,11 +268,7 @@ class DjangoExecutor(Executor):
             # singleton -> assume fields are all computed
             # e.g. user_id with source: ".request.user.id"
             data = self.serialize(
-                resource,
-                fields,
-                query=query,
-                request=request,
-                meta=meta
+                resource, fields, query=query, request=request, meta=meta
             )
         else:
             resolver = self.store.resolver
@@ -276,19 +290,24 @@ class DjangoExecutor(Executor):
                     meta=meta,
                 )
             else:
+                count = {} if settings.PAGINATION_TOTAL else None
                 queryset = self.get_queryset(
-                    resolver, resource, fields, query, request=request, **context
+                    resolver,
+                    resource,
+                    fields,
+                    query,
+                    count=count,
+                    request=request,
+                    **context,
                 )
                 records = list(queryset)
                 num_records = len(records)
                 if num_records and num_records > page_size:
                     cursor = self.get_next_page(query)
-                    set_dict(
-                        meta,
-                        'page.data', {
-                            'after': cursor,
-                        }
-                    )
+                    page_data = {"after": cursor}
+                    if count:
+                        page_data["total"] = count["total"]
+                    set_dict(meta, "page.data", page_data)
                     records = records[:page_size]
                 data = self.serialize(
                     resource,

@@ -536,6 +536,7 @@ class IntegrationTestCase(TestCase):
                     'page': {
                         'data': {
                             'after': after,
+                            'total': 2
                         }
                     }
                 }
