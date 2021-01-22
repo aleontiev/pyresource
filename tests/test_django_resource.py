@@ -6,10 +6,52 @@ from django_resource.space import Space
 from django_resource.resource import Resource
 from django_resource.server import Server
 from tests.models import User, Group, Location
+from .utils import Request, Fixture
 
+# basic features:
+# - actions: get, set, add, edit, delete, explain
+# - endpoints: server, space, resource, record, field
+# - features: sort, filter, group, page
 
+# advanced features:
+# - inspecting metadata
+# - deep filtering & sorting
+# - computed fields
+# - before & after hooks
+# - authorization
+# - custom actions
 
 def get_fixture():
+    userA = User.make(last_name='A', first_name='Alex')
+    userB = User.make(last_name='B', first_name='Bay')
+    userC = User.make(is_active=False, first_name='Inactive', last_name='I')
+    groupA = Group.make(name='A')
+    groupB = Group.make(name='B')
+    groupC = Group.make(name='C')
+    userA.groups.set([groupA, groupB])
+    userB.groups.set([groupA])
+    return Fixture(
+        users=[userA, userB, userC],
+        groups=[groupA, groupB, groupC]
+    )
+
+
+server = None
+def get_server():
+    global server
+    if server is not None:
+        # cache the server spec since it doesn't change
+        # across test cases
+        return server
+
+    # social network integration setup
+    # one space: test
+    # three collections:
+    # - users 
+    # - groups 
+    # - location 
+    # one singleton:
+    # - session (for authentication)
     server = Server(
         url='http://localhost/api/',
     )
@@ -44,7 +86,7 @@ def get_fixture():
         fields={
             "user": {
                 "type": ["null", "@users"],
-                "source": ".request.user.id"
+                "source": ".request.user"
             },
         },
         actions={
@@ -200,13 +242,7 @@ def get_fixture():
             }
         }
     )
-    return {
-        'server': server,
-        'tests': tests,
-        'users': users,
-        'groups': groups,
-        'session': session
-    }
+    return server
 
 
 class IntegrationTestCase(TestCase):
@@ -215,26 +251,19 @@ class IntegrationTestCase(TestCase):
     def test_version(self):
         self.assertEqual(__version__, '0.1.0')
 
-    def test_mvp(self):
-        # social network integration setup
-        # one space: test
-        # three collections:
-        # - users 
-        # - groups 
-        # - location 
-        # one singleton:
-        # - session (for authentication)
+    def test_get_record(self):
+        """Tests get_record"""
+        pass
 
-        # mvp tests for:
-        # - setup: initializing a server/space/resource/field
-        # - actions: get/add/edit/set/delete on resource/record/field endpoints
-        # - features: where/sort/page/take features
+    def test_get_field(self):
+        pass
 
-        fixture = get_fixture()
-        users = fixture['users']
-        groups = fixture['groups']
-        tests = fixture['tests']
-        server = fixture['server']
+    def test_setup_server(self):
+        server = get_server()
+        tests = server.spaces_by_name['tests']
+        users = tests.resources_by_name['users']
+        groups = tests.resources_by_name['groups']
+        session = tests.resources_by_name['session']
 
         self.assertEqual(groups.id, 'tests.groups')
         self.assertEqual(users.id, 'tests.users')
@@ -321,18 +350,40 @@ class IntegrationTestCase(TestCase):
         id = users.get_field('id')
         self.assertEqual(id.resource, users)
 
-        # empty request before any data exists
+    def test_get_resource(self):
+        """Tests get_resource"""
+        server = get_server()
+        tests = server.spaces_by_name['tests']
+        users = tests.resources_by_name['users']
+        groups = tests.resources_by_name['groups']
+        session = tests.resources_by_name['session']
+
         self.assertEqual(users.query.get(), {'data': []})
 
-        # setup data
-        userA = User.make(last_name='A', first_name='Alex')
-        userB = User.make(last_name='B', first_name='Bay')
-        userC = User.make(is_active=False, first_name='Inactive', last_name='I')
-        groupA = Group.make(name='A')
-        groupB = Group.make(name='B')
-        groupC = Group.make(name='C')
-        userA.groups.set([groupA, groupB])
-        userB.groups.set([groupA])
+        fixture = get_fixture()
+        userA, userB, userC = fixture.users
+        groupA, groupB, groupC = fixture.groups
+
+        ## selecting
+        session_get = session.query.get(
+            request=Request(userA)
+        )
+        self.assertEqual(session_get, {
+            'data': {
+                'user': str(userA.id)
+            }
+        })
+        session_take_user = session.query.take.user('id', 'first_name').get(
+            request=Request(userA)
+        )
+        self.assertEqual(session_take_user, {
+            'data': {
+                'user': {
+                    'id': str(userA.id),
+                    'first_name': userA.first_name
+                }
+            }
+        })
 
         simple_get = users.query.get()
         self.assertEqual(
@@ -444,7 +495,6 @@ class IntegrationTestCase(TestCase):
             }
         )
 
-        # prefetch_deep
         prefetch_deep_query = users.query('?take=*&take.groups=*&take.groups.users=id')
         prefetch_deep = prefetch_deep_query.get()
         self.assertEqual(
@@ -480,6 +530,8 @@ class IntegrationTestCase(TestCase):
             }
         )
 
+        ## filtering
+
         get_where = (
             users.query
             .take('id')
@@ -512,6 +564,8 @@ class IntegrationTestCase(TestCase):
             }
         )
 
+        ## sorting
+
         sort_descending = users.query.take('id').sort('-last_name').get()
         self.assertEqual(
             sort_descending,
@@ -523,6 +577,20 @@ class IntegrationTestCase(TestCase):
                 }]
             }
         )
+
+        sort_ascending = users.query.take('id').sort('last_name').get()
+        self.assertEqual(
+            sort_descending,
+            {
+                'data': [{
+                    'id': str(userB.id)
+                }, {
+                    'id': str(userA.id)
+                }]
+            }
+        )
+
+        ## paginating
 
         page_1 = users.query.take('id').page(size=1).get()
         after = base64.b64encode(json.dumps({'offset': 1}).encode('utf-8'))
@@ -552,12 +620,161 @@ class IntegrationTestCase(TestCase):
             }
         )
 
-        # advanced features:
-        # - pagination
-        # - inspecting metadata
-        # - space & server endpoints
-        # - deep filtering
-        # - computed fields
-        # - hooks
-        # - authorization
-        # - custom methods
+    def test_get_record(self):
+        """Tests get_record"""
+        server = get_server()
+        tests = server.spaces_by_name['tests']
+        users = tests.resources_by_name['users']
+        groups = tests.resources_by_name['groups']
+
+        fixture = get_fixture()
+        userA, userB, userC = fixture.users
+        groupA, groupB, groupC = fixture.groups
+
+        ## selecting
+        simple_get = users.query.get(userA.id)
+        self.assertEqual(
+            simple_get,
+            {
+                'data': {
+                    'id': str(userA.id),
+                    'email': userA.email,
+                    'first_name': userA.first_name,
+                    'last_name': userA.last_name,
+                    'name': None  # TODO: fix this
+                }
+            }
+        )
+
+        take_id_only = users.query.take('id').get(userA.id)
+        self.assertEqual(
+            take_id_only,
+            {
+                'data': {
+                    'id': str(userA.id)
+                }
+            }
+        )
+
+        dont_take_id = users.query.take('*', '-id').get(userA.id)
+        self.assertEqual(
+            dont_take_id,
+            {
+                'data': {
+                    'email': userA.email,
+                    'first_name': userA.first_name,
+                    'last_name': userA.last_name,
+                    'name': None
+                }
+            }
+        )
+
+        take_nothing = users.query.take('-id').get(userA.id)
+        self.assertEqual(
+            take_nothing,
+            {
+                'data': {}
+            }
+        )
+
+        take_groups = users.query.take('*', 'groups').get(userA.id)
+        self.assertEqual(
+            take_groups,
+            {
+                'data': {
+                    'id': str(userA.id),
+                    'email': userA.email,
+                    'first_name': userA.first_name,
+                    'last_name': userA.last_name,
+                    'name': None,
+                    'groups': [str(groupA.id), str(groupB.id)]
+                }
+            }
+        )
+
+        prefetch_groups = users.query('?take=*&take.groups=*').get(userA.id)
+        self.assertEqual(
+            prefetch_groups,
+            {
+                'data': {
+                    'id': str(userA.id),
+                    'email': userA.email,
+                    'first_name': userA.first_name,
+                    'last_name': userA.last_name,
+                    'name': None,
+                    'groups': [{
+                        'id': str(groupA.id),
+                        'name': groupA.name
+                    }, {
+                        'id': str(groupB.id),
+                        'name': groupB.name
+                    }]
+                }
+            }
+        )
+
+        prefetch_deep_query = users.query('?take=*&take.groups=*&take.groups.users=id')
+        prefetch_deep = prefetch_deep_query.get(userA.id)
+        self.assertEqual(
+            prefetch_deep,
+            {
+                'data': {
+                    'id': str(userA.id),
+                    'email': userA.email,
+                    'first_name': userA.first_name,
+                    'last_name': userA.last_name,
+                    'name': None,
+                    'groups': [{
+                        'id': str(groupA.id),
+                        'name': groupA.name,
+                        'users': [{'id': str(userA.id)}, {'id': str(userB.id)}],
+                    }, {
+                        'id': str(groupB.id),
+                        'name': groupB.name,
+                        'users': [{'id': str(userA.id)}]
+                    }]
+                }
+            }
+        )
+
+    def test_get_field(self):
+        """Tests get_field"""
+        server = get_server()
+        tests = server.spaces_by_name['tests']
+        users = tests.resources_by_name['users']
+        groups = tests.resources_by_name['groups']
+
+        fixture = get_fixture()
+        userA, userB, userC = fixture.users
+        groupA, groupB, groupC = fixture.groups
+
+        ## selecting
+        simple_get = users.query.get(userA.id, 'first_name')
+        self.assertEqual(
+            simple_get,
+            {
+                'data': userA.first_name
+            }
+        )
+
+        take_groups = users.query.get(userA.id, 'groups')
+        self.assertEqual(
+            take_groups,
+            {
+                'data': [str(groupA.id), str(groupB.id)]
+            }
+        )
+
+        prefetch_groups = users.query('?take=id,name').get(userA.id, 'groups')
+        self.assertEqual(
+            prefetch_groups,
+            {
+                'data': [{
+                    'id': str(groupA.id),
+                    'name': groupA.name
+                }, {
+                    'id': str(groupB.id),
+                    'name': groupB.name
+                }]
+            }
+        )

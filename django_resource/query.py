@@ -31,25 +31,25 @@ class Query(WhereQueryMixin):
     def __call__(self, *args, **kwargs):
         return self.from_querystring(*args, executor=self.executor, state=self.state)
 
-    def add(self, record=None, field=None):
-        return self._call('add', record=record, field=field)
+    def add(self, record=None, field=None, **context):
+        return self._call('add', record=record, field=field, **context)
 
-    def set(self, record=None, field=None):
-        return self._call('set', record=record, field=field)
+    def set(self, record=None, field=None, **context):
+        return self._call('set', record=record, field=field, **context)
 
-    def get(self, record=None, field=None):
-        return self._call('get', record=record, field=field)
+    def get(self, record=None, field=None, **context):
+        return self._call('get', record=record, field=field, **context)
 
-    def edit(self, record=None, field=None):
-        return self._call('edit', record=record, field=field)
+    def edit(self, record=None, field=None, **context):
+        return self._call('edit', record=record, field=field, **context)
 
-    def delete(self, record=None, field=None):
-        return self._call('delete', record=record, field=field)
+    def delete(self, record=None, field=None, **context):
+        return self._call('delete', record=record, field=field, **context)
 
-    def options(self, record=None, field=None):
-        return self._call('options', record=record, field=field)
+    def options(self, record=None, field=None, **context):
+        return self._call('options', record=record, field=field, **context)
 
-    def execute(self, request=None, **kwargs):
+    def execute(self, request=None, **context):
         executor = self.executor
         if not executor:
             raise QueryExecutionError(f'Query cannot execute without executor')
@@ -62,7 +62,7 @@ class Query(WhereQueryMixin):
         action = getattr(self.executor, action_name, None)
         if not action:
             raise QueryValidationError(f'Invalid action "{action_name}"')
-        return action(self, request=request, **kwargs)
+        return action(self, request=request, **context)
 
     @property
     def state(self):
@@ -165,10 +165,10 @@ class Query(WhereQueryMixin):
             kwargs[arg] = show
         return self._update({'take': kwargs}, copy=copy, level=level, merge=True)
 
-    def _call(self, action, record=None, field=None):
+    def _call(self, action, record=None, field=None, **context):
         if self.state.get('action') != action:
             return getattr(self.action(action), action)(
-                record=record, field=field
+                record=record, field=field, **context
             )
 
         if record or field:
@@ -178,9 +178,9 @@ class Query(WhereQueryMixin):
                 args['record'] = record
             if field:
                 args['field'] = field
-            return getattr(self._update(args), action)()
+            return getattr(self._update(args), action)(**context)
 
-        return self.execute()
+        return self.execute(**context)
 
     def _sort(self, level, *args, copy=True):
         """

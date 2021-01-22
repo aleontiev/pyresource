@@ -6,6 +6,8 @@ from django_resource.exceptions import (
     ResourceMisconfigured,
     SerializationError,
     QueryValidationError,
+    QueryExecutionError,
+    NotFound,
 )
 from .filters import DjangoFilter
 from django_resource.utils import set_dict
@@ -54,7 +56,15 @@ class DjangoExecutor(Executor):
 
     @classmethod
     def add_queryset_sorts(
-        cls, resource, fields, queryset, query, request=None, level=None, **context
+        cls,
+        resource,
+        fields,
+        queryset,
+        query,
+        request=None,
+        level=None,
+        field=None,
+        **context,
     ):
         """Add .order_by"""
         source = resource.source
@@ -64,7 +74,7 @@ class DjangoExecutor(Executor):
             sort = qs.get("sort", None)
             sorts = cls.get_sorts(resource, sort)
 
-        state = query.get_state(level)
+        state = cls.get_query_state(query, level=level, field=field)
         sort = state.get("sort", None)
         if sort:
             sorts = cls.get_sorts(resource, sort)
@@ -76,7 +86,15 @@ class DjangoExecutor(Executor):
 
     @classmethod
     def add_queryset_filters(
-        cls, resource, fields, queryset, query, request=None, level=None, **context
+        cls,
+        resource,
+        fields,
+        queryset,
+        query,
+        request=None,
+        level=None,
+        field=None,
+        **context,
     ):
         """Add .filter"""
         source = resource.source
@@ -88,7 +106,8 @@ class DjangoExecutor(Executor):
                 resource, where, query=query, request=request
             )
 
-        state = query.get_state(level)
+        state = cls.get_query_state(query, level=level, field=field)
+        record_id = state.get("record", None)
         where = state.get("where", None)
         if where:
             request_filters = cls.get_filters(
@@ -100,11 +119,23 @@ class DjangoExecutor(Executor):
 
         if request_filters:
             queryset = queryset.filter(request_filters)
+
+        if record_id:
+            queryset = queryset.filter(pk=record_id)
+
         return queryset
 
     @classmethod
     def add_queryset_prefetches(
-        cls, resource, fields, queryset, query, request=None, level=None, **context
+        cls,
+        resource,
+        fields,
+        queryset,
+        query,
+        request=None,
+        level=None,
+        field=None,
+        **context,
     ):
         """Add .prefetch_related"""
         # look for take.foo and translate into Prefetch(queryset=...)
@@ -112,7 +143,15 @@ class DjangoExecutor(Executor):
 
     @classmethod
     def add_queryset_annotations(
-        cls, resource, fields, queryset, query, request=None, level=None, **context
+        cls,
+        resource,
+        fields,
+        queryset,
+        query,
+        request=None,
+        level=None,
+        field=None,
+        **context,
     ):
         """Add .annotate"""
         return queryset
@@ -127,10 +166,11 @@ class DjangoExecutor(Executor):
         count=None,
         request=None,
         level=None,
+        field=None,
         **context,
     ):
         """Add pagination"""
-        state = query.get_state(level)
+        state = cls.get_query_state(query, level=level, field=field)
         page = state.get("page", {})
         size = int(page.get("size", settings.DEFAULT_PAGE_SIZE))
         after = page.get("after", None)
@@ -151,19 +191,26 @@ class DjangoExecutor(Executor):
                 # after = {'after': {'id': 1, 'name': 'test', ...}}
                 # only ordered fields are included
                 filters = {f"{key}__gt": value for key, value in after["after"].items()}
-
                 queryset = queryset.filter(**filters)
             else:
                 raise QueryValidationError("page:after is invalid: {after}")
 
         if count is not None:
-            count['total'] = queryset.count()
+            count["total"] = queryset.count()
         queryset = queryset[: size + 1]
         return queryset
 
     @classmethod
     def add_queryset_fields(
-        cls, resource, fields, queryset, query, request=None, level=None, **context
+        cls,
+        resource,
+        fields,
+        queryset,
+        query,
+        request=None,
+        level=None,
+        field=None,
+        **context,
     ):
         """Add .only"""
         only = set()
@@ -185,7 +232,15 @@ class DjangoExecutor(Executor):
 
     @classmethod
     def add_queryset_distinct(
-        cls, resource, fields, queryset, query, level=None, request=None, **context
+        cls,
+        resource,
+        fields,
+        queryset,
+        query,
+        level=None,
+        request=None,
+        field=None,
+        **context,
     ):
         """Add .distinct if the query has left/outer joins"""
         has_joins = False
@@ -207,6 +262,7 @@ class DjangoExecutor(Executor):
         request=None,
         count=None,
         level=None,
+        field=None,
         **context,
     ):
         queryset = cls.get_queryset_base(resolver, resource)
@@ -227,6 +283,7 @@ class DjangoExecutor(Executor):
                 request=request,
                 level=level,
                 count=count,
+                field=field,
                 **context,
             )
         # print(str(queryset.query))
@@ -314,6 +371,142 @@ class DjangoExecutor(Executor):
                     fields,
                     record=records,
                     query=query,
+                    request=request,
+                    meta=meta,
+                )
+
+        result = {"data": data}
+        if meta:
+            result["meta"] = meta
+        return result
+
+    def get_record(self, query, request=None, **context):
+        resource = self.store.resource
+
+        if not self.can(resource, "get.record", query, request):
+            raise Forbidden()
+
+        source = resource.source
+        meta = {}
+
+        fields = self.select_fields(
+            resource, action="get", query=query, request=request,
+        )
+
+        if not source:
+            # no source -> do not use queryset
+            if not resource.singleton:
+                raise ResourceMisconfigured(
+                    f'{resource.id}: cannot execute "get" on a collection with no source'
+                )
+            # singleton -> assume fields are all computed
+            # e.g. user_id with source: ".request.user.id"
+            data = self.serialize(
+                resource, fields, query=query, request=request, meta=meta
+            )
+        else:
+            resolver = self.store.resolver
+            if resource.singleton:
+                # get queryset and obtain first record
+                record = self.get_queryset(
+                    resolver, resource, query, request=request, **context
+                ).first()
+                if not record:
+                    raise ResourceMisconfigured(
+                        f"{resource.id}: could not locate record for singleton resource"
+                    )
+                data = self.serialize(
+                    resource,
+                    fields,
+                    query=query,
+                    request=request,
+                    record=record,
+                    meta=meta,
+                )
+            else:
+                queryset = self.get_queryset(
+                    resolver, resource, fields, query, request=request, **context,
+                )
+                record = queryset.first()
+                if not record:
+                    # no record
+                    raise NotFound()
+                data = self.serialize(
+                    resource,
+                    fields,
+                    record=record,
+                    query=query,
+                    request=request,
+                    meta=meta,
+                )
+
+        result = {"data": data}
+        if meta:
+            result["meta"] = meta
+        return result
+
+    def get_field(self, query, request=None, **context):
+        resource = self.store.resource
+
+        if not self.can(resource, "get.field", query, request):
+            raise Forbidden()
+
+        source = resource.source
+        meta = {}
+
+        fields = self.select_fields(
+            resource, action="get", query=query, request=request,
+        )
+        if len(fields) != 1:
+            raise QueryExecutionError("expecting 1 field")
+
+        field = fields[0].name
+
+        if not source:
+            # no source -> do not use queryset
+            if not resource.singleton:
+                raise ResourceMisconfigured(
+                    f'{resource.id}: cannot execute "get" on a collection with no source'
+                )
+            # singleton -> assume fields are all computed
+            # e.g. user_id with source: ".request.user.id"
+            data = self.serialize(
+                resource, fields, field=field, query=query, request=request, meta=meta
+            )
+        else:
+            resolver = self.store.resolver
+            if resource.singleton:
+                # get queryset and obtain first record
+                record = self.get_queryset(
+                    resolver, resource, query, request=request, **context
+                ).first()
+                if not record:
+                    raise ResourceMisconfigured(
+                        f"{resource.id}: could not locate record for singleton resource"
+                    )
+                data = self.serialize(
+                    resource,
+                    fields,
+                    query=query,
+                    request=request,
+                    field=field,
+                    record=record,
+                    meta=meta,
+                )
+            else:
+                queryset = self.get_queryset(
+                    resolver, resource, fields, query, request=request, **context,
+                )
+                record = queryset.first()
+                if not record:
+                    # no record
+                    raise NotFound()
+                data = self.serialize(
+                    resource,
+                    fields,
+                    record=record,
+                    query=query,
+                    field=field,
                     request=request,
                     meta=meta,
                 )
