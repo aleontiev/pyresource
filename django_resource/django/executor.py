@@ -22,7 +22,6 @@ class DjangoExecutor(Executor):
 
         # TODO: add id sort if there is no sort
         # to enable keyset pagination
-
         if not sorts:
             return None
         return sorts
@@ -386,69 +385,7 @@ class DjangoExecutor(Executor):
         return result
 
     def get_record(self, query, request=None, **context):
-        resource = self.store.resource
-
-        if not self.can(resource, "get.record", query, request):
-            raise Forbidden()
-
-        source = resource.source
-        meta = {}
-
-        fields = self.select_fields(
-            resource, action="get", query=query, request=request,
-        )
-
-        if not source:
-            # no source -> do not use queryset
-            if not resource.singleton:
-                raise ResourceMisconfigured(
-                    f'{resource.id}: cannot execute "get" on a collection with no source'
-                )
-            # singleton -> assume fields are all computed
-            # e.g. user_id with source: ".request.user.id"
-            data = self.serialize(
-                resource, fields, query=query, request=request, meta=meta
-            )
-        else:
-            resolver = self.store.resolver
-            if resource.singleton:
-                # get queryset and obtain first record
-                record = self.get_queryset(
-                    resolver, resource, query, request=request, **context
-                ).first()
-                if not record:
-                    raise ResourceMisconfigured(
-                        f"{resource.id}: could not locate record for singleton resource"
-                    )
-                data = self.serialize(
-                    resource,
-                    fields,
-                    query=query,
-                    request=request,
-                    record=record,
-                    meta=meta,
-                )
-            else:
-                queryset = self.get_queryset(
-                    resolver, resource, fields, query, request=request, **context,
-                )
-                record = queryset.first()
-                if not record:
-                    # no record
-                    raise NotFound()
-                data = self.serialize(
-                    resource,
-                    fields,
-                    record=record,
-                    query=query,
-                    request=request,
-                    meta=meta,
-                )
-
-        result = {"data": data}
-        if meta:
-            result["meta"] = meta
-        return result
+        return self._get('record', query, request=request, **context)
 
     def get_field(self, query, request=None, **context):
         return self._get('field', query, request=request, **context)
