@@ -10,7 +10,7 @@ class Store:
         elif resource.__class__.__name__ == 'Resource':
             self.resource = resource
         elif resource.__class__.__name__ == 'Server':
-            self.server = server
+            self.server = resource
 
     def get_space(self):
         if self.resource:

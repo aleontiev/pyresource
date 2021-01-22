@@ -350,6 +350,157 @@ class IntegrationTestCase(TestCase):
         id = users.get_field('id')
         self.assertEqual(id.resource, users)
 
+    def test_get_space(self):
+        server = get_server()
+        tests = server.spaces_by_name['tests']
+
+        fixture = get_fixture()
+        userA, userB, userC = fixture.users
+        groupA, groupB, groupC = fixture.groups
+        request = Request(userA)
+
+        self.assertEqual(
+            tests.query.get(request=request), {
+                'data': {
+                    'users': './users/',
+                    'groups': './groups/',
+                    'session': './session/'
+                }
+            }
+        )
+
+        get_all = (
+            tests.query
+            .take.users('id')
+            .take.groups('id')
+            .take.session('*')
+            .get(request=request)
+        )
+        self.assertEqual(
+            get_all, {
+                'data': {
+                    'users': [{
+                        'id': str(userA.id),
+                    }, {
+                        'id': str(userB.id)
+                    }],
+                    'groups': [{
+                        'id': str(groupA.id)
+                    }, {
+                        'id': str(groupB.id)
+                    }, {
+                        'id': str(groupC.id)
+                    }],
+                    'session': {
+                        'user': str(userA.id)
+                    }
+                }
+            }
+        )
+
+        get_with_filters = (
+            tests.query
+            .take.users('id')
+            .take.users.groups('id')
+            .where.users({'=': ['id', f'"{userA.id}"']})
+            .take.groups('id')
+            .where.groups({'=': ['id', f'"{groupA.id}"']})
+            .get(request=request)
+        )
+        self.assertEqual(
+            get_with_filters, {
+                'data': {
+                    'users': [{
+                        'id': str(userA.id),
+                        'groups': [{
+                            'id': str(groupA.id)
+                        }, {
+                            'id': str(groupB.id)
+                        }]
+                    }],
+                    'groups': [{
+                        'id': str(groupA.id)
+                    }],
+                }
+            }
+        )
+
+    def test_get_server(self):
+        server = get_server()
+
+        fixture = get_fixture()
+        userA, userB, userC = fixture.users
+        groupA, groupB, groupC = fixture.groups
+        request = Request(userA)
+
+        self.assertEqual(
+            server.query.get(request=request), {
+                'data': {
+                    'tests': './tests/',
+                }
+            }
+        )
+
+        get_all = (
+            server.query
+            .take.tests.users('id')
+            .take.tests.groups('id')
+            .take.tests.session('*')
+            .get(request=request)
+        )
+        self.assertEqual(
+            get_all, {
+                'data': {
+                    'tests': {
+                        'users': [{
+                            'id': str(userA.id),
+                        }, {
+                            'id': str(userB.id)
+                        }],
+                        'groups': [{
+                            'id': str(groupA.id)
+                        }, {
+                            'id': str(groupB.id)
+                        }, {
+                            'id': str(groupC.id)
+                        }],
+                        'session': {
+                            'user': str(userA.id)
+                        }
+                    }
+                }
+            }
+        )
+
+        get_with_filters = (
+            server.query
+            .take.tests.users('id')
+            .take.tests.users.groups('id')
+            .where.tests.users({'=': ['id', f'"{userA.id}"']})
+            .take.tests.groups('id')
+            .where.tests.groups({'=': ['id', f'"{groupA.id}"']})
+            .get(request=request)
+        )
+        self.assertEqual(
+            get_with_filters, {
+                'data': {
+                    'tests': {
+                        'users': [{
+                            'id': str(userA.id),
+                            'groups': [{
+                                'id': str(groupA.id)
+                            }, {
+                                'id': str(groupB.id)
+                            }]
+                        }],
+                        'groups': [{
+                            'id': str(groupA.id)
+                        }]
+                    }
+                }
+            }
+        )
+
     def test_get_resource(self):
         """Tests get_resource"""
         server = get_server()

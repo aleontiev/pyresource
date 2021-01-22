@@ -10,6 +10,7 @@ from .features import (
     get_take_fields,
     get_sort_fields,
     NestedFeature,
+    ROOT_FEATURES,
     WHERE,
     TAKE,
     SORT,
@@ -254,6 +255,14 @@ class Query(WhereQueryMixin):
 
     def __getitem__(self, key):
         return self._state[key]
+
+    def get_subquery(self, level=None):
+        state = self.state
+        substate = self.get_state(level)
+        for feature in ROOT_FEATURES:
+            if feature in state:
+                substate[feature] = state[feature]
+        return Query(state=substate, executor=self.executor)
 
     @classmethod
     def _build_update(cls, parts, key, value):

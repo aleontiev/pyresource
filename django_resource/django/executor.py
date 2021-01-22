@@ -10,7 +10,6 @@ from django_resource.exceptions import (
     NotFound,
 )
 from .filters import DjangoFilter
-from django_resource.utils import set_dict
 from django_resource.conf import settings
 
 
@@ -55,14 +54,7 @@ class DjangoExecutor(Executor):
 
     @classmethod
     def add_queryset_sorts(
-        cls,
-        resource,
-        fields,
-        queryset,
-        query,
-        request=None,
-        level=None,
-        **context,
+        cls, resource, fields, queryset, query, request=None, level=None, **context,
     ):
         """Add .order_by"""
         source = resource.source
@@ -84,14 +76,7 @@ class DjangoExecutor(Executor):
 
     @classmethod
     def add_queryset_filters(
-        cls,
-        resource,
-        fields,
-        queryset,
-        query,
-        request=None,
-        level=None,
-        **context,
+        cls, resource, fields, queryset, query, request=None, level=None, **context,
     ):
         """Add .filter"""
         source = resource.source
@@ -124,14 +109,7 @@ class DjangoExecutor(Executor):
 
     @classmethod
     def add_queryset_prefetches(
-        cls,
-        resource,
-        fields,
-        queryset,
-        query,
-        request=None,
-        level=None,
-        **context,
+        cls, resource, fields, queryset, query, request=None, level=None, **context,
     ):
         """Add .prefetch_related"""
         # look for take.foo and translate into Prefetch(queryset=...)
@@ -139,14 +117,7 @@ class DjangoExecutor(Executor):
 
     @classmethod
     def add_queryset_annotations(
-        cls,
-        resource,
-        fields,
-        queryset,
-        query,
-        request=None,
-        level=None,
-        **context,
+        cls, resource, fields, queryset, query, request=None, level=None, **context,
     ):
         """Add .annotate"""
         return queryset
@@ -196,14 +167,7 @@ class DjangoExecutor(Executor):
 
     @classmethod
     def add_queryset_fields(
-        cls,
-        resource,
-        fields,
-        queryset,
-        query,
-        request=None,
-        level=None,
-        **context,
+        cls, resource, fields, queryset, query, request=None, level=None, **context,
     ):
         """Add .only"""
         only = set()
@@ -225,14 +189,7 @@ class DjangoExecutor(Executor):
 
     @classmethod
     def add_queryset_distinct(
-        cls,
-        resource,
-        fields,
-        queryset,
-        query,
-        level=None,
-        request=None,
-        **context,
+        cls, resource, fields, queryset, query, level=None, request=None, **context,
     ):
         """Add .distinct if the query has left/outer joins"""
         has_joins = False
@@ -292,16 +249,93 @@ class DjangoExecutor(Executor):
         return model.objects.all()
 
     def get_resource(self, query, request=None, **context):
-        return self._get('resource', query, request=request, **context)
+        return self._get("resource", query, request=request, **context)
 
-    def _get(self, endpoint, query, request=None, **context):
-        resource = self.store.resource
+    @classmethod
+    def merge_meta(cls, meta, other, name):
+        if not other:
+            return
+        meta.update(other)
+
+    def get_server(self, query, request=None, prefix=None, **context):
+        server = self.store.server
+        spaces = server.spaces_by_name
+        take = query.state.get("take")
+        data = {}
+        meta = {}
+        for name, space in spaces.items():
+            shallow = True
+            if take is not None:
+                if not take.get(name, False):
+                    continue
+                if isinstance(take[name], dict):
+                    shallow = False
+            if shallow:
+                data[name] = f"./{name}/"
+            else:
+                subquery = query.get_subquery(level=name).space(name)
+                subprefix = name if prefix is None else f"{prefix}.{name}"
+                subdata = self.get_space(
+                    subquery, space=space, request=request, prefix=subprefix, **context
+                )
+                # merge the data
+                data[name] = subdata["data"]
+                # merge the metadata if it exists
+                self.merge_meta(meta, subdata.get("meta"), name)
+
+        result = {"data": data}
+        if meta:
+            result["meta"] = meta
+        return result
+
+    def get_space(self, query, request=None, prefix=None, space=None, **context):
+        if space is None:
+            space = self.store.space
+
+        resources = space.resources_by_name
+        take = query.state.get("take")
+        data = {}
+        meta = {}
+        for name, resource in resources.items():
+            shallow = True
+            if take is not None:
+                if not take.get(name, False):
+                    continue
+                if isinstance(take[name], dict):
+                    shallow = False
+            if shallow:
+                data[name] = f"./{name}/"
+            else:
+                subquery = query.get_subquery(level=name).resource(name)
+                subprefix = name if prefix is None else f"{prefix}.{name}"
+                subdata = self.get_resource(
+                    subquery,
+                    resource=resource,
+                    request=request,
+                    prefix=subprefix,
+                    **context,
+                )
+                # merge the data
+                data[name] = subdata["data"]
+                # merge the metadata if it exists
+                self.merge_meta(meta, subdata.get("meta"), name)
+
+        result = {"data": data}
+        if meta:
+            result["meta"] = meta
+        return result
+
+    def _get(
+        self, endpoint, query, request=None, prefix=None, resource=None, **context
+    ):
+        if resource is None:
+            resource = self.store.resource
 
         if not self.can(resource, f"get.{endpoint}", query, request):
             raise Forbidden()
 
         source = resource.source
-        if endpoint == 'resource':
+        if endpoint == "resource":
             page_size = int(
                 query.state.get("page", {}).get("size", settings.DEFAULT_PAGE_SIZE)
             )
@@ -343,7 +377,9 @@ class DjangoExecutor(Executor):
                     meta=meta,
                 )
             else:
-                count = {} if endpoint == 'resource' and settings.PAGINATION_TOTAL else None
+                count = (
+                    {} if endpoint == "resource" and settings.PAGINATION_TOTAL else None
+                )
                 queryset = self.get_queryset(
                     resolver,
                     resource,
@@ -353,7 +389,7 @@ class DjangoExecutor(Executor):
                     request=request,
                     **context,
                 )
-                if endpoint == 'resource':
+                if endpoint == "resource":
                     # many records
                     records = list(queryset)
                     num_records = len(records)
@@ -362,7 +398,10 @@ class DjangoExecutor(Executor):
                         page_data = {"after": cursor}
                         if count:
                             page_data["total"] = count["total"]
-                        set_dict(meta, "page.data", page_data)
+                        if "page" not in meta:
+                            meta["page"] = {}
+                        page_key = "data" if prefix is None else f"data.{prefix}"
+                        meta["page"][page_key] = page_data
                         records = records[:page_size]
                 else:
                     # one record only
@@ -385,7 +424,7 @@ class DjangoExecutor(Executor):
         return result
 
     def get_record(self, query, request=None, **context):
-        return self._get('record', query, request=request, **context)
+        return self._get("record", query, request=request, **context)
 
     def get_field(self, query, request=None, **context):
-        return self._get('field', query, request=request, **context)
+        return self._get("field", query, request=request, **context)

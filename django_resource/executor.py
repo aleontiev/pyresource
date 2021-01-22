@@ -301,7 +301,7 @@ class Executor:
                     value = list(value.all())
 
                 if (is_field_root and query.state.get("take")) or (
-                    take and isinstance(take.get(name), dict)
+                    take is not None and isinstance(take.get(name), dict)
                 ):
                     # deep serialization
                     link = get_link(type)
