@@ -43,9 +43,9 @@ class Executor:
         return base64.b64encode(json.dumps(cursor).encode("utf-8"))
 
     @classmethod
-    def get_next_page(cls, query, offset=None, level=None, field=None):
+    def get_next_page(cls, query, offset=None, level=None):
         # TODO: support keyset pagination
-        state = cls.get_query_state(query, level=level, field=field)
+        state = cls.get_query_state(query, level=level)
         page = state.get("page", {})
         size = int(page.get("size", settings.DEFAULT_PAGE_SIZE))
         page = page.get("after", None)
@@ -91,7 +91,7 @@ class Executor:
         fields = resource.fields
         # if this is a field-oriented request
         take_field = query.state.get("field")
-        state = cls.get_query_state(query, level=level, field=take_field)
+        state = cls.get_query_state(query, level=level)
         take = state.get("take")
 
         for field in fields:
@@ -213,14 +213,16 @@ class Executor:
         return cls.to_json_value(value)
 
     @classmethod
-    def get_query_state(cls, query, level=None, field=None):
+    def get_query_state(cls, query, level=None):
+        root = query.state
+        field = root.get('field')
         state = None
         if field:
             if level is None:
                 # no state at the root, use initial state
                 # remove all of the leveled features
 
-                state = copy.copy(query.state)
+                state = copy.copy(root)
                 for feature in LEVELED_FEATURES:
                     state.pop(feature, None)
             else:
@@ -235,7 +237,6 @@ class Executor:
         resource,
         fields,
         record=None,
-        field=None,
         query=None,
         level=None,
         request=None,
@@ -256,8 +257,8 @@ class Executor:
         """
         results = []
 
-        state = cls.get_query_state(query, level=level, field=field)
-        field_name = field
+        state = cls.get_query_state(query, level=level)
+        field_name = query.state.get('field', None)
         page_size = state.get("page", {}).get("size", settings.DEFAULT_PAGE_SIZE)
         take = state.get("take")
 
@@ -272,7 +273,7 @@ class Executor:
             # special case for a singleton without a source
             records = [None]
 
-        field_root = bool(field_name and not level)
+        is_field_root = bool(field_name and not level)
         for record in records:
             result = {}
             for field in fields:
@@ -299,7 +300,7 @@ class Executor:
                     # account for Django many-related managers
                     value = list(value.all())
 
-                if (field_root and query.state.get("take")) or (
+                if (is_field_root and query.state.get("take")) or (
                     take and isinstance(take.get(name), dict)
                 ):
                     # deep serialization
@@ -332,7 +333,6 @@ class Executor:
                             query=query,
                             request=request,
                             meta=meta,
-                            field=field_name,
                         )
                     elif field_name is None:
                         raise SerializationError(
@@ -349,7 +349,7 @@ class Executor:
 
             results.append(result)
 
-        if field_root:
+        if is_field_root:
             # return one field only
             results = [result[field_name] for result in results]
 

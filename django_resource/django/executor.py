@@ -63,7 +63,6 @@ class DjangoExecutor(Executor):
         query,
         request=None,
         level=None,
-        field=None,
         **context,
     ):
         """Add .order_by"""
@@ -74,7 +73,7 @@ class DjangoExecutor(Executor):
             sort = qs.get("sort", None)
             sorts = cls.get_sorts(resource, sort)
 
-        state = cls.get_query_state(query, level=level, field=field)
+        state = cls.get_query_state(query, level=level)
         sort = state.get("sort", None)
         if sort:
             sorts = cls.get_sorts(resource, sort)
@@ -93,7 +92,6 @@ class DjangoExecutor(Executor):
         query,
         request=None,
         level=None,
-        field=None,
         **context,
     ):
         """Add .filter"""
@@ -106,7 +104,7 @@ class DjangoExecutor(Executor):
                 resource, where, query=query, request=request
             )
 
-        state = cls.get_query_state(query, level=level, field=field)
+        state = cls.get_query_state(query, level=level)
         record_id = state.get("record", None)
         where = state.get("where", None)
         if where:
@@ -134,7 +132,6 @@ class DjangoExecutor(Executor):
         query,
         request=None,
         level=None,
-        field=None,
         **context,
     ):
         """Add .prefetch_related"""
@@ -150,7 +147,6 @@ class DjangoExecutor(Executor):
         query,
         request=None,
         level=None,
-        field=None,
         **context,
     ):
         """Add .annotate"""
@@ -166,11 +162,10 @@ class DjangoExecutor(Executor):
         count=None,
         request=None,
         level=None,
-        field=None,
         **context,
     ):
         """Add pagination"""
-        state = cls.get_query_state(query, level=level, field=field)
+        state = cls.get_query_state(query, level=level)
         page = state.get("page", {})
         size = int(page.get("size", settings.DEFAULT_PAGE_SIZE))
         after = page.get("after", None)
@@ -209,7 +204,6 @@ class DjangoExecutor(Executor):
         query,
         request=None,
         level=None,
-        field=None,
         **context,
     ):
         """Add .only"""
@@ -239,7 +233,6 @@ class DjangoExecutor(Executor):
         query,
         level=None,
         request=None,
-        field=None,
         **context,
     ):
         """Add .distinct if the query has left/outer joins"""
@@ -262,7 +255,6 @@ class DjangoExecutor(Executor):
         request=None,
         count=None,
         level=None,
-        field=None,
         **context,
     ):
         queryset = cls.get_queryset_base(resolver, resource)
@@ -283,7 +275,6 @@ class DjangoExecutor(Executor):
                 request=request,
                 level=level,
                 count=count,
-                field=field,
                 **context,
             )
         # print(str(queryset.query))
@@ -302,20 +293,26 @@ class DjangoExecutor(Executor):
         return model.objects.all()
 
     def get_resource(self, query, request=None, **context):
+        return self._get('resource', query, request=request, **context)
+
+    def _get(self, endpoint, query, request=None, **context):
         resource = self.store.resource
 
-        if not self.can(resource, "get.resource", query, request):
+        if not self.can(resource, f"get.{endpoint}", query, request):
             raise Forbidden()
 
         source = resource.source
-        page_size = int(
-            query.state.get("page", {}).get("size", settings.DEFAULT_PAGE_SIZE)
-        )
+        if endpoint == 'resource':
+            page_size = int(
+                query.state.get("page", {}).get("size", settings.DEFAULT_PAGE_SIZE)
+            )
+
         meta = {}
 
         fields = self.select_fields(
             resource, action="get", query=query, request=request,
         )
+
         if not source:
             # no source -> do not use queryset
             if not resource.singleton:
@@ -347,7 +344,7 @@ class DjangoExecutor(Executor):
                     meta=meta,
                 )
             else:
-                count = {} if settings.PAGINATION_TOTAL else None
+                count = {} if endpoint == 'resource' and settings.PAGINATION_TOTAL else None
                 queryset = self.get_queryset(
                     resolver,
                     resource,
@@ -357,15 +354,23 @@ class DjangoExecutor(Executor):
                     request=request,
                     **context,
                 )
-                records = list(queryset)
-                num_records = len(records)
-                if num_records and num_records > page_size:
-                    cursor = self.get_next_page(query)
-                    page_data = {"after": cursor}
-                    if count:
-                        page_data["total"] = count["total"]
-                    set_dict(meta, "page.data", page_data)
-                    records = records[:page_size]
+                if endpoint == 'resource':
+                    # many records
+                    records = list(queryset)
+                    num_records = len(records)
+                    if num_records and num_records > page_size:
+                        cursor = self.get_next_page(query)
+                        page_data = {"after": cursor}
+                        if count:
+                            page_data["total"] = count["total"]
+                        set_dict(meta, "page.data", page_data)
+                        records = records[:page_size]
+                else:
+                    # one record only
+                    records = queryset.first()
+                    if not records:
+                        # no record
+                        raise NotFound()
                 data = self.serialize(
                     resource,
                     fields,
@@ -446,72 +451,4 @@ class DjangoExecutor(Executor):
         return result
 
     def get_field(self, query, request=None, **context):
-        resource = self.store.resource
-
-        if not self.can(resource, "get.field", query, request):
-            raise Forbidden()
-
-        source = resource.source
-        meta = {}
-
-        fields = self.select_fields(
-            resource, action="get", query=query, request=request,
-        )
-        if len(fields) != 1:
-            raise QueryExecutionError("expecting 1 field")
-
-        field = fields[0].name
-
-        if not source:
-            # no source -> do not use queryset
-            if not resource.singleton:
-                raise ResourceMisconfigured(
-                    f'{resource.id}: cannot execute "get" on a collection with no source'
-                )
-            # singleton -> assume fields are all computed
-            # e.g. user_id with source: ".request.user.id"
-            data = self.serialize(
-                resource, fields, field=field, query=query, request=request, meta=meta
-            )
-        else:
-            resolver = self.store.resolver
-            if resource.singleton:
-                # get queryset and obtain first record
-                record = self.get_queryset(
-                    resolver, resource, query, request=request, **context
-                ).first()
-                if not record:
-                    raise ResourceMisconfigured(
-                        f"{resource.id}: could not locate record for singleton resource"
-                    )
-                data = self.serialize(
-                    resource,
-                    fields,
-                    query=query,
-                    request=request,
-                    field=field,
-                    record=record,
-                    meta=meta,
-                )
-            else:
-                queryset = self.get_queryset(
-                    resolver, resource, fields, query, request=request, **context,
-                )
-                record = queryset.first()
-                if not record:
-                    # no record
-                    raise NotFound()
-                data = self.serialize(
-                    resource,
-                    fields,
-                    record=record,
-                    query=query,
-                    field=field,
-                    request=request,
-                    meta=meta,
-                )
-
-        result = {"data": data}
-        if meta:
-            result["meta"] = meta
-        return result
+        return self._get('field', query, request=request, **context)
