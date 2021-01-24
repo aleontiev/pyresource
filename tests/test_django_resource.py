@@ -179,6 +179,8 @@ def get_server():
                 'lazy': True,
                 'can': {
                     'set': {'=': ['.query.action', '"add"']},
+                    # can only set if the new value is smaller {'>': ['.changes.groups', 'groups']}
+                    # can only set if name is not changing {'null': '.changes.name'}
                     'add': True,
                     'get': True,
                 },
@@ -250,13 +252,6 @@ class IntegrationTestCase(TestCase):
 
     def test_version(self):
         self.assertEqual(__version__, '0.1.0')
-
-    def test_get_record(self):
-        """Tests get_record"""
-        pass
-
-    def test_get_field(self):
-        pass
 
     def test_setup_server(self):
         server = get_server()

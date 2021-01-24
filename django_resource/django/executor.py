@@ -249,7 +249,7 @@ class DjangoExecutor(Executor):
         return model.objects.all()
 
     def get_resource(self, query, request=None, **context):
-        return self._get("resource", query, request=request, **context)
+        return self._get_resource("resource", query, request=request, **context)
 
     @classmethod
     def merge_meta(cls, meta, other, name):
@@ -257,13 +257,20 @@ class DjangoExecutor(Executor):
             return
         meta.update(other)
 
-    def get_server(self, query, request=None, prefix=None, **context):
-        server = self.store.server
-        spaces = server.spaces_by_name
+    def _get_resources(self, type, query, request=None, prefix=None, **context):
+        """Get many resources from a server or space perspective"""
+        if type == 'server':
+            root = context.get('server') or self.store.server
+            child_name = 'space'
+        elif type == 'space':
+            root = context.get('space') or self.store.space
+            child_name = 'resource'
+
+        children = getattr(root, f'{child_name}s_by_name')
         take = query.state.get("take")
         data = {}
         meta = {}
-        for name, space in spaces.items():
+        for name, child in children.items():
             shallow = True
             if take is not None:
                 if not take.get(name, False):
@@ -273,10 +280,11 @@ class DjangoExecutor(Executor):
             if shallow:
                 data[name] = f"./{name}/"
             else:
-                subquery = query.get_subquery(level=name).space(name)
+                subquery = getattr(query.get_subquery(level=name), child_name)(name)
                 subprefix = name if prefix is None else f"{prefix}.{name}"
-                subdata = self.get_space(
-                    subquery, space=space, request=request, prefix=subprefix, **context
+                context[child_name] = child
+                subdata = getattr(self, f'get_{child_name}')(
+                    subquery, request=request, prefix=subprefix, **context
                 )
                 # merge the data
                 data[name] = subdata["data"]
@@ -288,44 +296,13 @@ class DjangoExecutor(Executor):
             result["meta"] = meta
         return result
 
-    def get_space(self, query, request=None, prefix=None, space=None, **context):
-        if space is None:
-            space = self.store.space
+    def get_server(self, query, request=None, prefix=None, server=None, **context):
+        return self._get_resources('server', query, request=request, prefix=prefix, **context)
 
-        resources = space.resources_by_name
-        take = query.state.get("take")
-        data = {}
-        meta = {}
-        for name, resource in resources.items():
-            shallow = True
-            if take is not None:
-                if not take.get(name, False):
-                    continue
-                if isinstance(take[name], dict):
-                    shallow = False
-            if shallow:
-                data[name] = f"./{name}/"
-            else:
-                subquery = query.get_subquery(level=name).resource(name)
-                subprefix = name if prefix is None else f"{prefix}.{name}"
-                subdata = self.get_resource(
-                    subquery,
-                    resource=resource,
-                    request=request,
-                    prefix=subprefix,
-                    **context,
-                )
-                # merge the data
-                data[name] = subdata["data"]
-                # merge the metadata if it exists
-                self.merge_meta(meta, subdata.get("meta"), name)
+    def get_space(self, query, request=None, prefix=None, **context):
+        return self._get_resources('space', query, request=request, prefix=prefix, **context)
 
-        result = {"data": data}
-        if meta:
-            result["meta"] = meta
-        return result
-
-    def _get(
+    def _get_resource(
         self, endpoint, query, request=None, prefix=None, resource=None, **context
     ):
         if resource is None:
@@ -424,7 +401,7 @@ class DjangoExecutor(Executor):
         return result
 
     def get_record(self, query, request=None, **context):
-        return self._get("record", query, request=request, **context)
+        return self._get_resource("record", query, request=request, **context)
 
     def get_field(self, query, request=None, **context):
-        return self._get("field", query, request=request, **context)
+        return self._get_resource("field", query, request=request, **context)
