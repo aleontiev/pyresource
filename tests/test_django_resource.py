@@ -78,10 +78,7 @@ def get_server():
         can={
             'login': True,
             'logout': True,
-            'add': False,
-            'set': False,
-            'edit': False,
-            'delete': False
+            'get': True
         },
         fields={
             "user": {
@@ -202,10 +199,16 @@ def get_server():
             },
             'created': {
                 'lazy': True,
+                'default': {
+                    'now': {}
+                },
                 'can': {'get': True}
             },
             'updated': {
                 'lazy': True,
+                'default': {
+                    'now': {}
+                },
                 'can': {'get': True}
             }
         },

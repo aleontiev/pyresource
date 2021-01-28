@@ -14,7 +14,7 @@ from django_resource.type_utils import get_link
 from django.db.models import Prefetch, F, Value
 from django.contrib.postgres.aggregates import ArrayAgg
 from django_resource.utils import resource_to_django
-from .filters import DjangoFilter
+from .operators import make_expression, make_filter
 from django_resource.conf import settings
 
 
@@ -65,9 +65,8 @@ class DjangoExecutor(Executor):
             return None
 
         where = RequestResolver.resolve(where, query=query, request=request)
-        filters = DjangoFilter(where, translate=resource if translate else None)
         try:
-            return filters.value
+            return make_filter(where, translate=resource if translate else None)
         except FilterError as e:
             raise ResourceMisconfigured(
                 f"{resource.id}: failed to build filters\n" f"Error: {e}"
@@ -244,11 +243,10 @@ class DjangoExecutor(Executor):
                 kwargs = {}
                 # optional ordering
                 if isinstance(field.source, dict):
-                    field_source = SchemaResolver.get_field_source(field.source)
                     qs = field.source.get('queryset')
                     sort = qs.get('sort', None) if qs else None
                     if sort:
-                        sort = f'{field_source}.{sort}'
+                        sort = f'{source}.{sort}'
                         kwargs['ordering'] = resource_to_django(sort)
 
                 return ArrayAgg(source, **kwargs)
@@ -256,7 +254,8 @@ class DjangoExecutor(Executor):
                 return F(source)
         else:
             # functional annotation e.g. {"count": "location.users"}
-            return F('pk') # TODO
+            print(f'making expression {field.source}')
+            return make_expression(field.source)
 
     @classmethod
     def add_queryset_fields(

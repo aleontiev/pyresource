@@ -1,6 +1,7 @@
-from django.db.models import Q, F
-from django_resource.exceptions import FilterError
-from django.db.models.functions import Now
+import decimal
+from django.db.models import Q, F, Value, Count
+from django.db.models.functions import Now, Concat, Coalesce, Trunc
+from django_resource.exceptions import FilterError, ExpressionError
 from django_resource.utils import is_literal, resource_to_django
 from django_resource.translator import ResourceTranslator
 
@@ -25,18 +26,13 @@ def transform_query_key(key, translate=None):
 
 def transform_query_value(value):
     if isinstance(value, dict):
-        # Django functions
-        if len(value) > 1:
-            raise FilterError('Not expecting multiple keys in function')
-        method = next(iter(value))
-        if method == 'now':
-            return Now()
-        else:
-            # TODO support majority of Django functions from 3.x:
-            # trunc, concat
-            raise FilterError(f'Filter transform/function "{method}" is not supported')
+        try:
+            return make_expression(value)
+        except ExpressionError as e:
+            raise FilterError(f'Failed to make expression from {value}: {str(e)}')
+
     if isinstance(value, list):
-        return [transform_value(v) for v in value]
+        return [transform_query_value(v) for v in value]
 
     if not is_literal(value):
         # field references should be converted to Django F() references
@@ -49,7 +45,7 @@ def transform_query_value(value):
     return value
 
 
-def make_query_operator(
+def make_comparison_operator(
     name,
     num_args=2,
     can_invert=True,
@@ -101,28 +97,28 @@ def make_query_operator(
 
 
 not_ = compound_operators['not']
-gt = make_query_operator('gt', inverse='lte')
-gte = make_query_operator('gte', inverse='lt')
-lt = make_query_operator('lt', inverse='gte')
-lte = make_query_operator('lte', inverse='gt')
-eq = make_query_operator('exact')
-ne = make_query_operator('exact', transform=not_)
-contains = make_query_operator('contains', can_invert=False)
-not_contains = make_query_operator('contains', can_invert=False, transform=not_)
-icontains = make_query_operator('icontains', can_invert=False)
-not_icontains = make_query_operator('icontains', can_invert=False, transform=not_)
-in_ = make_query_operator('in', can_invert=False)
-not_in = make_query_operator('in', can_invert=False, transform=not_)
-range_ = make_query_operator('range', can_invert=False)
-not_range = make_query_operator('range', can_invert=False, transform=not_)
-isnull = make_query_operator('isnull', num_args=1, value=True, can_invert=False)
-not_null = make_query_operator('isnull', num_args=1, value=False, can_invert=False, transform=not_)
-true = make_query_operator('exact', num_args=1, value=True, can_invert=False)
-false = make_query_operator('exact', num_args=1, value=False, can_invert=False)
+gt = make_comparison_operator('gt', inverse='lte')
+gte = make_comparison_operator('gte', inverse='lt')
+lt = make_comparison_operator('lt', inverse='gte')
+lte = make_comparison_operator('lte', inverse='gt')
+eq = make_comparison_operator('exact')
+ne = make_comparison_operator('exact', transform=not_)
+contains = make_comparison_operator('contains', can_invert=False)
+not_contains = make_comparison_operator('contains', can_invert=False, transform=not_)
+icontains = make_comparison_operator('icontains', can_invert=False)
+not_icontains = make_comparison_operator('icontains', can_invert=False, transform=not_)
+in_ = make_comparison_operator('in', can_invert=False)
+not_in = make_comparison_operator('in', can_invert=False, transform=not_)
+range_ = make_comparison_operator('range', can_invert=False)
+not_range = make_comparison_operator('range', can_invert=False, transform=not_)
+isnull = make_comparison_operator('isnull', num_args=1, value=True, can_invert=False)
+not_null = make_comparison_operator('isnull', num_args=1, value=False, can_invert=False, transform=not_)
+true = make_comparison_operator('exact', num_args=1, value=True, can_invert=False)
+false = make_comparison_operator('exact', num_args=1, value=False, can_invert=False)
 
 
 
-query_operators = {
+comparison_operators = {
     '>=': gte,
     'gte': gte,
     '>': gt,
@@ -151,3 +147,165 @@ query_operators = {
     'true': true,
     'false': false
 }
+
+
+def make_expression_operator(
+    base,
+    num_args=None,
+):
+    def method(*args):
+        # optionally add other options like `output_field`
+        return base(*args)
+
+    return {
+        'method': method,
+        'num_args': num_args
+    }
+
+concat = make_expression_operator(Concat)
+count = make_expression_operator(Count, num_args=1)
+now = make_expression_operator(Now, num_args=0)
+coalesce = make_expression_operator(Coalesce)
+trunc = make_expression_operator(Trunc, num_args=2)
+
+
+expression_operators = {
+    'concat': concat,
+    'count': count,
+    'now': now,
+    'trunc': trunc,
+    'coalesce': coalesce,
+}
+
+
+def make_literal(value):
+    return f'"{value}"'
+
+
+def make_expression(value):
+    if value is None or isinstance(value, (bool, int, float, decimal.Decimal)):
+        return Value(value)
+
+    if isinstance(value, str):
+        if is_literal(value):
+            return Value(value[1:-1])
+        else:
+            value = resource_to_django(value)
+            return F(value)
+
+    if not isinstance(value, dict):
+        raise ExpressionError(f'value must be a dict or literal, not {value}')
+
+    result = None
+    operators = expression_operators
+    for method, arguments in value.items():
+        if method in compound_operators:
+            if method == 'or' or method == 'and':
+                if not isinstance(arguments, list):
+                    raise ExpressionError('"or"/"and" argument must be a list')
+
+                value = [make_expression(argument) for argument in arguments]
+                return reduce(compound_operators[method], value)
+            elif method == 'not':
+                if isinstance(arguments, list) and len(arguments) == 1:
+                    arguments = arguments[0]
+                if not isinstance(arguments, dict):
+                    raise Expression('"not" argument must be a dict')
+
+                value = make_expression(value)
+                return compound_operators[method](value)
+        elif method in operators:
+            operator = operators[method]
+            num_args = operator.get('num_args', None)
+            fn = operator['method']
+            if num_args is None:
+                pass  # any number of arguments accepted
+            elif num_args == 0:
+                if arguments:
+                    raise ExpressionError(f'"{method}" arguments not expected: {arguments}')
+                arguments = []
+            elif num_args == 1:
+                if isinstance(arguments, list):
+                    if len(arguments) != 1:
+                        raise ExpressionError(
+                            f'"{method}" arguments must be a list of size 1 or non-list value.\n'
+                            f'Instead got: {arguments}'
+                        )
+
+            else:
+                if not isinstance(arguments, list) or not len(arguments) == num_args:
+                    raise ExpressionError(
+                        f'"{method}" arguments must be a list of size {num_args}.\n'
+                        f'Instead got: {arguments}'
+                    )
+
+            if not isinstance(arguments, list):
+                arguments = [arguments]
+
+            arguments = [make_expression(argument) for argument in arguments]
+            return fn(*arguments)
+        else:
+            raise ExpressionError(
+                f'"{method}" is not a valid expression'
+            )
+
+
+def make_filter(where, translate=None):
+    if not isinstance(where, (dict, list)):
+        raise FilterError('"where" must be a dict or list')
+
+    if isinstance(where, list):
+        where = {'or': where}
+
+    result = None
+    for method, arguments in where.items():
+        if method in compound_operators:
+            if method == 'or' or method == 'and':
+                if not isinstance(arguments, list):
+                    raise FilterError('"or"/"and" argument must be a list')
+
+                value = [make_filter(argument, translate=translate) for argument in arguments]
+                return reduce(compound_operators[method], value)
+            elif method == 'not':
+                if isinstance(arguments, list) and len(arguments) == 1:
+                    arguments = arguments[0]
+                if not isinstance(arguments, dict):
+                    raise FilterError('"not" argument must be a dict')
+
+                return compound_operators[method](value)
+        elif method in comparison_operators:
+            operator = comparison_operators[method]
+            num_args = operator.get('num_args', 0)
+            method = operator['method']
+            if num_args == 0:
+                if arguments:
+                    raise FilterError(f'"{method}" arguments not expected: {arguments}')
+                arguments = []
+
+            elif num_args == 1:
+                if isinstance(arguments, list):
+                    if len(arguments) != 1:
+                        raise FilterError(
+                            f'"{method}" arguments must be a list of size 1 or non-list value.\n'
+                            f'Instead got: {arguments}'
+                        )
+
+            elif num_args == 2:
+                if not isinstance(arguments, list) or not len(arguments) == num_args:
+                    raise FilterError(
+                        f'"{method}" arguments must be a list of size {num_args}.\n'
+                        f'Instead got: {arguments}'
+                    )
+
+            else:
+                raise FilterError(
+                    'Only binary/unary/simple callables are supported at this time'
+                )
+
+            if not isinstance(arguments, list):
+                arguments = [arguments]
+            return method(*arguments, translate=translate)
+        else:
+            raise FilterError(
+                f'{method} is not a valid filter'
+            )

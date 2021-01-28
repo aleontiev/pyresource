@@ -36,6 +36,10 @@ class FilterError(Exception):
     pass
 
 
+class ExpressionError(Exception):
+    pass
+
+
 class SerializationError(Exception):
     pass
 
