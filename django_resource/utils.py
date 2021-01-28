@@ -107,3 +107,29 @@ def coerce_query_values(values, singletons=True):
     single = isinstance(values, list) and len(values) == 1
     values = [coerce_query_value(value, singletons) for value in values]
     return values[0] if single else values
+
+
+def is_literal(key):
+    if not isinstance(key, str):
+        return True
+    # for strings
+    if key and key.startswith('"') or key.startswith("'") and key[0] == key[-1]:
+        return True
+    return False
+
+
+def resource_to_django(key):
+    if isinstance(key, (list, tuple)):
+        return [resource_to_django(k) for k in key]
+
+    desc = False
+    if key.startswith('-'):
+        desc = True
+        key = key[1:]
+
+    if key.startswith('.'):
+        # this is an annotation and should not have any other "."
+        assert key.count('.') == 1
+        return f'-{key}' if desc else key
+    key = key.replace('.', '__')
+    return f'-{key}' if desc else key

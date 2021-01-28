@@ -1,6 +1,8 @@
 from django.db.models import Q, F
 from django_resource.exceptions import FilterError
 from django.db.models.functions import Now
+from django_resource.utils import is_literal, resource_to_django
+from django_resource.translator import ResourceTranslator
 
 
 # core set of operators
@@ -10,19 +12,15 @@ compound_operators = {
     'not': lambda a: ~a
 }
 
-def is_literal(key):
-    if not isinstance(key, str):
-        return True
-    # for strings
-    if key and key.startswith('"') or key.startswith("'") and key[0] == key[-1]:
-        return True
-    return False
 
-
-def transform_query_key(key):
+def transform_query_key(key, translate=None):
     if is_literal(key):
         raise ValueError('key cannot be a literal')
-    return key.replace('.', '__')
+
+    if translate:
+        key = ResourceTranslator.translate(key, translate)
+
+    return resource_to_django(key)
 
 
 def transform_query_value(value):
@@ -60,14 +58,14 @@ def make_query_operator(
     value=None
 ):
     inverse_str = isinstance(inverse, str)
-    def method(a, b=None):
+    def method(a, b=None, translate=None):
         if value is not None:
             b = value
 
         inverted = False
         filter_name = name
         try:
-            key = transform_query_key(a)
+            key = transform_query_key(a, translate=translate)
             val = transform_query_value(b)
         except ValueError:
             try:

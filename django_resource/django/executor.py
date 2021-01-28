@@ -1,4 +1,5 @@
 from django_resource.executor import Executor
+from django_resource.translator import ResourceTranslator
 from django_resource.resolver import RequestResolver, SchemaResolver
 from django_resource.exceptions import (
     Forbidden,
@@ -9,24 +10,44 @@ from django_resource.exceptions import (
     QueryExecutionError,
     NotFound,
 )
+from django_resource.type_utils import get_link
+from django.db.models import Prefetch, F, Value
+from django.contrib.postgres.aggregates import ArrayAgg
+from django_resource.utils import resource_to_django
 from .filters import DjangoFilter
 from django_resource.conf import settings
 
 
 class DjangoExecutor(Executor):
     @classmethod
-    def get_sorts(cls, resource, sorts):
+    def get_sorts(cls, sorts, translate=None):
         if isinstance(sorts, str):
             sorts = [sorts]
 
-        # TODO: add id sort if there is no sort
-        # to enable keyset pagination
         if not sorts:
             return None
-        return sorts
+
+        results = []
+        for sort in sorts:
+            desc = False
+            if sort.startswith('-'):
+                sort = sort[1:]
+                desc = True
+            if translate:
+                sort = ResourceTranslator.translate(
+                    sort,
+                    translate
+                )
+
+            sort = resource_to_django(sort)
+            if desc:
+                # add descending sort marker
+                sort = f'-{sort}'
+            results.append(sort)
+        return results
 
     @classmethod
-    def get_filters(cls, resource, where, query=None, request=None):
+    def get_filters(cls, resource, where, query=None, request=None, translate=False):
         """Build `django.db.models.Q` object for a queryset
 
         For example:
@@ -35,7 +56,7 @@ class DjangoExecutor(Executor):
         where = {
             "or": [
                 {'=': ['.request.user.id', 'id']},
-                {'>=': ['created', {'now': {}}
+                {'>=': ['created', {'now': {}}]}
             ]
         }
         return = Q(id=123) | Q(created__gte=Now())
@@ -44,7 +65,7 @@ class DjangoExecutor(Executor):
             return None
 
         where = RequestResolver.resolve(where, query=query, request=request)
-        filters = DjangoFilter(where)
+        filters = DjangoFilter(where, translate=resource if translate else None)
         try:
             return filters.value
         except FilterError as e:
@@ -54,20 +75,20 @@ class DjangoExecutor(Executor):
 
     @classmethod
     def add_queryset_sorts(
-        cls, resource, fields, queryset, query, request=None, level=None, **context,
+        cls, resource, fields, queryset, query, request=None, level=None, related=None, **context,
     ):
         """Add .order_by"""
-        source = resource.source
+        source = cls.get_queryset_source(resource, related=related)
         sorts = None
         if isinstance(source, dict):
             qs = source.get("queryset")
             sort = qs.get("sort", None)
-            sorts = cls.get_sorts(resource, sort)
+            sorts = cls.get_sorts(sort)
 
         state = cls.get_query_state(query, level=level)
         sort = state.get("sort", None)
         if sort:
-            sorts = cls.get_sorts(resource, sort)
+            sorts = cls.get_sorts(sort, translate=resource)
 
         # order by request sorts, or by default sorts
         if sorts:
@@ -76,10 +97,10 @@ class DjangoExecutor(Executor):
 
     @classmethod
     def add_queryset_filters(
-        cls, resource, fields, queryset, query, request=None, level=None, **context,
+        cls, resource, fields, queryset, query, request=None, level=None, related=None, **context,
     ):
         """Add .filter"""
-        source = resource.source
+        source = cls.get_queryset_source(resource, related=related)
         request_filters = default_filters = None
         if isinstance(source, dict):
             qs = source.get("queryset")
@@ -93,7 +114,11 @@ class DjangoExecutor(Executor):
         where = state.get("where", None)
         if where:
             request_filters = cls.get_filters(
-                resource, where, query=query, request=request
+                resource,
+                where,
+                query=query,
+                request=request,
+                translate=True
             )
 
         if default_filters:
@@ -109,17 +134,56 @@ class DjangoExecutor(Executor):
 
     @classmethod
     def add_queryset_prefetches(
-        cls, resource, fields, queryset, query, request=None, level=None, **context,
+        cls,
+        resource,
+        fields,
+        queryset,
+        query,
+        level=None,
+        resolver=None,
+        related=None,
+        request=None,
+        **context,
     ):
-        """Add .prefetch_related"""
-        # look for take.foo and translate into Prefetch(queryset=...)
-        return queryset
+        """Add .prefetch_related to optimize deep query performance
 
-    @classmethod
-    def add_queryset_annotations(
-        cls, resource, fields, queryset, query, request=None, level=None, **context,
-    ):
-        """Add .annotate"""
+        This indirectly supported nested filtering/ordering/pagination by recursively
+        calling get_queryset to build the querysets at each query node.
+
+        Prefetches are added for relation fields for which "take" is an object.
+        This indicates that fields, not just values, should be included
+        """
+        state = cls.get_query_state(query, level=level)
+        prefetches = []
+        take = state.get('take', {})
+        root_field = query.state.get('field', None) if level is None else None
+        take_root = root_field is not None and query.state.get('take') is not None
+        if take or take_root:
+            for field in fields:
+                take_field = take.get(field.name)
+                if take_root or (take_field and isinstance(take_field, dict)):
+                    source = SchemaResolver.get_field_source(field.source)
+                    source = resource_to_django(source)
+                    related = field.related
+                    related_level = f'{level}.{field.name}' if level else field.name
+                    related_fields = cls.select_fields(
+                        related, action="get", query=query, request=request, level=related_level
+                    )
+                    next_queryset = cls.get_queryset(
+                        resolver,
+                        related,
+                        related_fields,
+                        query,
+                        request=request,
+                        level=related_level,
+                        **context
+                    )
+                    prefetches.append(
+                        Prefetch(source, queryset=next_queryset, to_attr=f'.{field.name}')
+                    )
+
+        if prefetches:
+            queryset = queryset.prefetch_related(*prefetches)
         return queryset
 
     @classmethod
@@ -130,11 +194,13 @@ class DjangoExecutor(Executor):
         queryset,
         query,
         count=None,
-        request=None,
         level=None,
         **context,
     ):
         """Add pagination"""
+        if level is not None:
+            return queryset
+
         state = cls.get_query_state(query, level=level)
         page = state.get("page", {})
         size = int(page.get("size", settings.DEFAULT_PAGE_SIZE))
@@ -166,30 +232,69 @@ class DjangoExecutor(Executor):
         return queryset
 
     @classmethod
-    def add_queryset_fields(
-        cls, resource, fields, queryset, query, request=None, level=None, **context,
+    def make_annotation(
+        cls, field, **context
     ):
-        """Add .only"""
-        only = set()
+        is_list = field._is_list
+        source = SchemaResolver.get_field_source(field.source)
+        if isinstance(source, str):
+            # string annotation e.g. "user.name"
+            source = resource_to_django(source)
+            if is_list:
+                kwargs = {}
+                # optional ordering
+                if isinstance(field.source, dict):
+                    field_source = SchemaResolver.get_field_source(field.source)
+                    qs = field.source.get('queryset')
+                    sort = qs.get('sort', None) if qs else None
+                    if sort:
+                        sort = f'{field_source}.{sort}'
+                        kwargs['ordering'] = resource_to_django(sort)
 
+                return ArrayAgg(source, **kwargs)
+            else:
+                return F(source)
+        else:
+            # functional annotation e.g. {"count": "location.users"}
+            return F('pk') # TODO
+
+    @classmethod
+    def add_queryset_fields(
+        cls, resource, fields, queryset, query, level=None, **context,
+    ):
+        """Add fields
+
+        All of a Resource's fields represented in a queryset ("resourced fields")
+        are annotated with a prefix of "." in order to prevent
+        naming conflicts between source and resourced fields
+        """
+        annotations = {}
+        state = cls.get_query_state(query, level=level)
+        take = state.get('take', None)
+        root_field = query.state.get('field', None) if level is None else None
+        root_take = query.state.get('take', None)
         for field in fields:
-            source = SchemaResolver.get_field_source(field.source)
-            if source is None:
-                # ignore fields without a source name i.e. real underlying field
-                continue
-            if "." in source:
-                # for a nested source like a.b.c, return the first field: a
-                source = source.split(".")[0]
-            only.add(source)
+            if root_field:
+                if root_take:
+                    # ignore field being prefetched
+                    break
+            else:
+                if take and isinstance(take.get(field.name), dict):
+                    # ignore fields being prefetched
+                    continue
 
-        if only:
-            only = list(only)
-            queryset = queryset.only(*only)
-        return queryset
+            annotations[f'.{field.name}'] = cls.make_annotation(
+                field,
+                **context
+            )
+
+        if annotations:
+            queryset = queryset.annotate(**annotations)
+        return queryset.only('pk')
 
     @classmethod
     def add_queryset_distinct(
-        cls, resource, fields, queryset, query, level=None, request=None, **context,
+        cls, resource, fields, queryset, query, **context,
     ):
         """Add .distinct if the query has left/outer joins"""
         has_joins = False
@@ -203,42 +308,36 @@ class DjangoExecutor(Executor):
 
     @classmethod
     def get_queryset(
-        cls,
-        resolver,
-        resource,
-        fields,
-        query,
-        request=None,
-        count=None,
-        level=None,
-        **context,
+        cls, resolver, resource, fields, query, **context,
     ):
-        queryset = cls.get_queryset_base(resolver, resource)
+        queryset = cls.get_queryset_base(resolver, resource, **context)
         for add in (
+            "prefetches",
+            "fields",
             "filters",
             "sorts",
-            "prefetches",
-            "annotations",
-            "fields",
             "distinct",
             "pagination",
         ):
             queryset = getattr(cls, f"add_queryset_{add}")(
-                resource,
-                fields,
-                queryset,
-                query,
-                request=request,
-                level=level,
-                count=count,
-                **context,
+                resource, fields, queryset, query, resolver=resolver, **context,
             )
         # print(str(queryset.query))
         return queryset
 
     @classmethod
-    def get_queryset_base(cls, resolver, resource):
-        source = resource.source
+    def get_queryset_source(self, resource, related=None):
+        if related and isinstance(related.source, dict) and 'queryset' in related.source:
+            source = related.source
+            source['queryset']['model'] = resource.source
+        else:
+            source = resource.source
+        return source
+
+    @classmethod
+    def get_queryset_base(cls, resolver, resource, related=None, **context):
+        source = cls.get_queryset_source(resource, related=related)
+
         try:
             model = resolver.get_model(source)
         except SchemaResolverError as e:
@@ -251,22 +350,16 @@ class DjangoExecutor(Executor):
     def get_resource(self, query, request=None, **context):
         return self._get_resource("resource", query, request=request, **context)
 
-    @classmethod
-    def merge_meta(cls, meta, other, name):
-        if not other:
-            return
-        meta.update(other)
-
     def _get_resources(self, type, query, request=None, prefix=None, **context):
         """Get many resources from a server or space perspective"""
-        if type == 'server':
-            root = context.get('server') or self.store.server
-            child_name = 'space'
-        elif type == 'space':
-            root = context.get('space') or self.store.space
-            child_name = 'resource'
+        if type == "server":
+            root = context.get("server") or self.store.server
+            child_name = "space"
+        elif type == "space":
+            root = context.get("space") or self.store.space
+            child_name = "resource"
 
-        children = getattr(root, f'{child_name}s_by_name')
+        children = getattr(root, f"{child_name}s_by_name")
         take = query.state.get("take")
         data = {}
         meta = {}
@@ -283,7 +376,7 @@ class DjangoExecutor(Executor):
                 subquery = getattr(query.get_subquery(level=name), child_name)(name)
                 subprefix = name if prefix is None else f"{prefix}.{name}"
                 context[child_name] = child
-                subdata = getattr(self, f'get_{child_name}')(
+                subdata = getattr(self, f"get_{child_name}")(
                     subquery, request=request, prefix=subprefix, **context
                 )
                 # merge the data
@@ -297,10 +390,14 @@ class DjangoExecutor(Executor):
         return result
 
     def get_server(self, query, request=None, prefix=None, server=None, **context):
-        return self._get_resources('server', query, request=request, prefix=prefix, **context)
+        return self._get_resources(
+            "server", query, request=request, prefix=prefix, **context
+        )
 
     def get_space(self, query, request=None, prefix=None, **context):
-        return self._get_resources('space', query, request=request, prefix=prefix, **context)
+        return self._get_resources(
+            "space", query, request=request, prefix=prefix, **context
+        )
 
     def _get_resource(
         self, endpoint, query, request=None, prefix=None, resource=None, **context
@@ -339,7 +436,7 @@ class DjangoExecutor(Executor):
             if resource.singleton:
                 # get queryset and obtain first record
                 record = self.get_queryset(
-                    resolver, resource, query, request=request, **context
+                    resolver, resource, fields, query, request=request, **context
                 ).first()
                 if not record:
                     raise ResourceMisconfigured(

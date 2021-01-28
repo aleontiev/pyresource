@@ -126,6 +126,12 @@ def get_server():
             'id': 'id',
             'name': 'name',
             'users': {
+                'source': {
+                    'queryset': {
+                        'field': 'users',
+                        'sort': 'created'
+                    }
+                },
                 'lazy': True,
                 'can': {'get': True},
             },
@@ -187,7 +193,7 @@ def get_server():
                 'source': {
                     'queryset': {
                         'field': 'groups',
-                        'sort': 'created',
+                        'sort': 'name',
                         'where': {
                             'true': 'is_active'
                         }
@@ -540,13 +546,13 @@ class IntegrationTestCase(TestCase):
                     'email': userA.email,
                     'first_name': userA.first_name,
                     'last_name': userA.last_name,
-                    'name': None  # TODO: fix this
+                    'name': str(userA.id)  # TODO: fix this
                 }, {
                     'id': str(userB.id),
                     'email': userB.email,
                     'first_name': userB.first_name,
                     'last_name': userB.last_name,
-                    'name': None  # TODO: fix this
+                    'name': str(userB.id)  # TODO: fix this
                 }]
             }
         )
@@ -563,7 +569,7 @@ class IntegrationTestCase(TestCase):
             }
         )
 
-        dont_take_id = users.query.take('*', '-id').get()
+        dont_take_id = users.query.take('*', '-id', '-name').get()
         self.assertEqual(
             dont_take_id,
             {
@@ -571,12 +577,10 @@ class IntegrationTestCase(TestCase):
                     'email': userA.email,
                     'first_name': userA.first_name,
                     'last_name': userA.last_name,
-                    'name': None
                 }, {
                     'email': userB.email,
                     'first_name': userB.first_name,
                     'last_name': userB.last_name,
-                    'name': None
                 }]
             }
         )
@@ -588,7 +592,7 @@ class IntegrationTestCase(TestCase):
             }
         )
 
-        take_groups = users.query.take('*', 'groups').get()
+        take_groups = users.query.take('*', 'groups', '-name').get()
         self.assertEqual(
             take_groups,
             {
@@ -597,20 +601,18 @@ class IntegrationTestCase(TestCase):
                     'email': userA.email,
                     'first_name': userA.first_name,
                     'last_name': userA.last_name,
-                    'name': None,
                     'groups': [str(groupA.id), str(groupB.id)]
                 }, {
                     'id': str(userB.id),
                     'email': userB.email,
                     'first_name': userB.first_name,
                     'last_name': userB.last_name,
-                    'name': None,
                     'groups': [str(groupA.id)]
                 }]
             }
         )
 
-        prefetch_groups = users.query('?take=*&take.groups=*').get()
+        prefetch_groups = users.query('?take=*,-name&take.groups=*').get()
         self.assertEqual(
             prefetch_groups,
             {
@@ -619,7 +621,6 @@ class IntegrationTestCase(TestCase):
                     'email': userA.email,
                     'first_name': userA.first_name,
                     'last_name': userA.last_name,
-                    'name': None,
                     'groups': [{
                         'id': str(groupA.id),
                         'name': groupA.name
@@ -632,7 +633,6 @@ class IntegrationTestCase(TestCase):
                     'email': userB.email,
                     'first_name': userB.first_name,
                     'last_name': userB.last_name,
-                    'name': None,
                     'groups': [{
                         'id': str(groupA.id),
                         'name': groupA.name
@@ -641,7 +641,7 @@ class IntegrationTestCase(TestCase):
             }
         )
 
-        prefetch_deep_query = users.query('?take=*&take.groups=*&take.groups.users=id')
+        prefetch_deep_query = users.query('?take=*,-name&take.groups=*&take.groups.users=id')
         prefetch_deep = prefetch_deep_query.get()
         self.assertEqual(
             prefetch_deep,
@@ -651,7 +651,6 @@ class IntegrationTestCase(TestCase):
                     'email': userA.email,
                     'first_name': userA.first_name,
                     'last_name': userA.last_name,
-                    'name': None,
                     'groups': [{
                         'id': str(groupA.id),
                         'name': groupA.name,
@@ -666,7 +665,6 @@ class IntegrationTestCase(TestCase):
                     'email': userB.email,
                     'first_name': userB.first_name,
                     'last_name': userB.last_name,
-                    'name': None,
                     'groups': [{
                         'id': str(groupA.id),
                         'name': groupA.name,
@@ -787,7 +785,7 @@ class IntegrationTestCase(TestCase):
                     'email': userA.email,
                     'first_name': userA.first_name,
                     'last_name': userA.last_name,
-                    'name': None  # TODO: fix this
+                    'name': str(userA.id)  # TODO: fix this
                 }
             }
         )
@@ -810,7 +808,7 @@ class IntegrationTestCase(TestCase):
                     'email': userA.email,
                     'first_name': userA.first_name,
                     'last_name': userA.last_name,
-                    'name': None
+                    'name': str(userA.id)  # TODO: fix
                 }
             }
         )
@@ -832,7 +830,7 @@ class IntegrationTestCase(TestCase):
                     'email': userA.email,
                     'first_name': userA.first_name,
                     'last_name': userA.last_name,
-                    'name': None,
+                    'name': str(userA.id),  # TODO: fix
                     'groups': [str(groupA.id), str(groupB.id)]
                 }
             }
@@ -847,7 +845,7 @@ class IntegrationTestCase(TestCase):
                     'email': userA.email,
                     'first_name': userA.first_name,
                     'last_name': userA.last_name,
-                    'name': None,
+                    'name': str(userA.id),  # TODO: fix
                     'groups': [{
                         'id': str(groupA.id),
                         'name': groupA.name
@@ -869,7 +867,7 @@ class IntegrationTestCase(TestCase):
                     'email': userA.email,
                     'first_name': userA.first_name,
                     'last_name': userA.last_name,
-                    'name': None,
+                    'name': str(userA.id),  # TODO: fix
                     'groups': [{
                         'id': str(groupA.id),
                         'name': groupA.name,

@@ -60,8 +60,13 @@ class RequestResolver:
     def resolve(cls, data, **context):
         """Return a resolved version of filter data
 
-        Arguments like .request.user.pk or .query.action.
+        - Arguments like .request.user.pk or .query.action.
         will be set to actual values
+
+        - If expression arguments end up entirely as constants
+        and the expression can be interpretted in Python,
+        the expression will be reduced into constants.
+        TODO(this)
         """
         if isinstance(data, dict):
             return {

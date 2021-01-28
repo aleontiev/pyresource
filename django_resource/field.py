@@ -1,5 +1,5 @@
 from .utils import cached_property
-from .types import is_link, is_list, validate
+from .types import is_list, get_link, validate
 from .resource import Resource, is_resolved
 from .expression import execute
 from .schemas import FieldSchema
@@ -12,7 +12,7 @@ class Field(Resource):
     def __init__(self, *args, **kwargs):
         super(Field, self).__init__(*args, **kwargs)
         type = self.get_option('type')
-        self._is_link = is_link(type)
+        self._is_link = get_link(type)
         self._is_list = is_list(type)
 
     def setup(self):
@@ -43,6 +43,18 @@ class Field(Resource):
     def get_from_source(self, source):
         return execute(source, {'fields': self.parent})[0]
 
+    @cached_property
+    def related(self):
+        link = self._is_link
+        if not link:
+            return None
+        if '.' in link:
+            # link is resource ID
+            return self.space.server.get_resource_by_id(link)
+        else:
+            # link is resource name referencing the current space
+            return self.space.resources_by_name.get(link)
+
     @property
     def parent(self):
         return self.get_option('parent')
@@ -64,9 +76,15 @@ class Field(Resource):
         return self.get_space()
 
     def get_space(self):
+        from .space import Space
+
         space = None
         parent = self.parent
-        if parent.get_meta('space') == '.':
+        space = parent.get_option('space')
+        if space and (
+            space == '.' or
+            (isinstance(space, Space) and space.name == '.')
+        ):
             # get root space
             parent_name = parent.get_meta('name')
             while parent_name == 'fields':

@@ -4,8 +4,9 @@ from .operators import compound_operators, query_operators
 
 
 class DjangoFilter:
-    def __init__(self, where):
+    def __init__(self, where, translate=None):
         self.where = where
+        self.translate = translate
 
     @cached_property
     def value(self):
@@ -27,7 +28,7 @@ class DjangoFilter:
                     if not isinstance(arguments, list):
                         raise FilterError('"or"/"and" argument must be a list')
 
-                    value = [DjangoFilter(argument).value for argument in arguments]
+                    value = [DjangoFilter(argument, translate=self.translate).value for argument in arguments]
                     return reduce(compound_operators[method], value)
                 elif method == 'not':
                     if isinstance(arguments, list) and len(arguments) == 1:
@@ -67,4 +68,4 @@ class DjangoFilter:
 
                 if not isinstance(arguments, list):
                     arguments = [arguments]
-                return method(*arguments)
+                return method(*arguments, translate=self.translate)

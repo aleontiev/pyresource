@@ -4,8 +4,9 @@ import copy
 
 from .exceptions import SerializationError, MethodNotAllowed
 from .conf import settings
+from .resolver import SchemaResolver
 from .utils import get
-from .features import LEVELED_FEATURES
+from .features import LEVELED_FEATURES, ROOT_FEATURES
 from .type_utils import get_link
 
 
@@ -216,19 +217,24 @@ class Executor:
     def get_query_state(cls, query, level=None):
         root = query.state
         field = root.get('field')
-        state = None
-        if field:
-            if level is None:
-                # no state at the root, use initial state
-                # remove all of the leveled features
+        if not field:
+            return query.get_state(level)
 
-                state = copy.copy(root)
-                for feature in LEVELED_FEATURES:
-                    state.pop(feature, None)
-            else:
-                level = level.split(".")[1:] or None
-        if state is None:
+        state = None
+        if level is None:
+            # no state at the root, use initial state
+            # remove all of the leveled features
+            state = copy.copy(root)
+            for feature in LEVELED_FEATURES:
+                state.pop(feature, None)
+        else:
+            # shift th elevel, remove root features
+            level = level.split(".")[1:] or None
             state = query.get_state(level)
+            state = copy.copy(state)
+            for feature in ROOT_FEATURES:
+                state.pop(feature, None)
+
         return state
 
     @classmethod
@@ -256,7 +262,6 @@ class Executor:
             Serialized representation of record or list of records
         """
         results = []
-
         state = cls.get_query_state(query, level=level)
         field_name = query.state.get('field', None)
         page_size = state.get("page", {}).get("size", settings.DEFAULT_PAGE_SIZE)
@@ -279,21 +284,29 @@ class Executor:
             for field in fields:
                 name = field.name
                 type = field.type
-                # string-type source indicates a renamed basic field
-                # dict-type source indicates a computed field (e.g. concat of 2 fields)
-                source = field.source if isinstance(field.source, str) else name
-                context = {"fields": record, "request": request, "query": query.state}
+                use_context = True
                 if record:
                     # get from record provided
-                    value = get(source, record)
-                else:
+                    # use special .name properties that are added as annotations
+                    try:
+                        value = getattr(record, f'.{name}')
+                        use_context = False
+                    except AttributeError as e:
+                        if f'.{name}' not in str(e):
+                            raise
+
+                if use_context:
                     # get from context (request/query data)
+                    source = SchemaResolver.get_field_source(field.source) or name
                     if source.startswith("."):
+                        context = {"fields": record, "request": request, "query": query.state}
                         source = source[1:]
                     else:
-                        raise SerializationError(
-                            f"Source {source} must start with . because no record"
-                        )
+                        if record is None:
+                            raise SerializationError(
+                                f"Source {source} must start with . because no record"
+                            )
+                        context = record
                     value = get(source, context)
 
                 if hasattr(value, "all") and callable(value.all):
@@ -356,3 +369,9 @@ class Executor:
         if not as_list:
             results = results[0]
         return results
+
+    @classmethod
+    def merge_meta(cls, meta, other, name):
+        if not other:
+            return
+        meta.update(other)

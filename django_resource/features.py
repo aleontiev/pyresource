@@ -7,6 +7,8 @@ TAKE = 'take'
 SORT = 'sort'
 GROUP = 'group'
 WHERE = 'where'
+FIELD = 'field'
+RECORD = 'record'
 
 LEVELED_FEATURES = {
     GROUP,
@@ -17,7 +19,9 @@ LEVELED_FEATURES = {
 }
 ROOT_FEATURES = {
     INSPECT,
-    ACTION
+    ACTION,
+    FIELD,
+    RECORD,
 }
 FEATURES = LEVELED_FEATURES | ROOT_FEATURES
 
