@@ -22,9 +22,9 @@ from .utils import Request, Fixture
 # - custom actions
 
 def get_fixture():
-    userA = User.make(last_name='A', first_name='Alex')
-    userB = User.make(last_name='B', first_name='Bay')
-    userC = User.make(is_active=False, first_name='Inactive', last_name='I')
+    userA = User.make(family_name='A', first_name='Alex')
+    userB = User.make(family_name='B', first_name='Bay')
+    userC = User.make(is_active=False, first_name='Inactive', family_name='I')
     groupA = Group.make(name='A')
     groupB = Group.make(name='B')
     groupC = Group.make(name='C')
@@ -166,14 +166,14 @@ def get_server():
         fields={
             'id': 'id',
             'first_name': 'first_name',
-            'last_name': 'last_name',
+            'last_name': 'family_name',
             'name': {
                 'type': 'string',
                 'source': {
                     'concat': [
                         'first_name',
                         '" "',
-                        'last_name'
+                        'family_name'
                     ]
                 },
                 'can': {
@@ -545,13 +545,13 @@ class IntegrationTestCase(TestCase):
                     'id': str(userA.id),
                     'email': userA.email,
                     'first_name': userA.first_name,
-                    'last_name': userA.last_name,
+                    'last_name': userA.family_name,
                     'name': str(userA.id)  # TODO: fix this
                 }, {
                     'id': str(userB.id),
                     'email': userB.email,
                     'first_name': userB.first_name,
-                    'last_name': userB.last_name,
+                    'last_name': userB.family_name,
                     'name': str(userB.id)  # TODO: fix this
                 }]
             }
@@ -576,11 +576,11 @@ class IntegrationTestCase(TestCase):
                 'data': [{
                     'email': userA.email,
                     'first_name': userA.first_name,
-                    'last_name': userA.last_name,
+                    'last_name': userA.family_name,
                 }, {
                     'email': userB.email,
                     'first_name': userB.first_name,
-                    'last_name': userB.last_name,
+                    'last_name': userB.family_name,
                 }]
             }
         )
@@ -600,13 +600,13 @@ class IntegrationTestCase(TestCase):
                     'id': str(userA.id),
                     'email': userA.email,
                     'first_name': userA.first_name,
-                    'last_name': userA.last_name,
+                    'last_name': userA.family_name,
                     'groups': [str(groupA.id), str(groupB.id)]
                 }, {
                     'id': str(userB.id),
                     'email': userB.email,
                     'first_name': userB.first_name,
-                    'last_name': userB.last_name,
+                    'last_name': userB.family_name,
                     'groups': [str(groupA.id)]
                 }]
             }
@@ -620,7 +620,7 @@ class IntegrationTestCase(TestCase):
                     'id': str(userA.id),
                     'email': userA.email,
                     'first_name': userA.first_name,
-                    'last_name': userA.last_name,
+                    'last_name': userA.family_name,
                     'groups': [{
                         'id': str(groupA.id),
                         'name': groupA.name
@@ -632,7 +632,7 @@ class IntegrationTestCase(TestCase):
                     'id': str(userB.id),
                     'email': userB.email,
                     'first_name': userB.first_name,
-                    'last_name': userB.last_name,
+                    'last_name': userB.family_name,
                     'groups': [{
                         'id': str(groupA.id),
                         'name': groupA.name
@@ -650,7 +650,7 @@ class IntegrationTestCase(TestCase):
                     'id': str(userA.id),
                     'email': userA.email,
                     'first_name': userA.first_name,
-                    'last_name': userA.last_name,
+                    'last_name': userA.family_name,
                     'groups': [{
                         'id': str(groupA.id),
                         'name': groupA.name,
@@ -664,7 +664,7 @@ class IntegrationTestCase(TestCase):
                     'id': str(userB.id),
                     'email': userB.email,
                     'first_name': userB.first_name,
-                    'last_name': userB.last_name,
+                    'last_name': userB.family_name,
                     'groups': [{
                         'id': str(groupA.id),
                         'name': groupA.name,
@@ -784,7 +784,7 @@ class IntegrationTestCase(TestCase):
                     'id': str(userA.id),
                     'email': userA.email,
                     'first_name': userA.first_name,
-                    'last_name': userA.last_name,
+                    'last_name': userA.family_name,
                     'name': str(userA.id)  # TODO: fix this
                 }
             }
@@ -807,7 +807,7 @@ class IntegrationTestCase(TestCase):
                 'data': {
                     'email': userA.email,
                     'first_name': userA.first_name,
-                    'last_name': userA.last_name,
+                    'last_name': userA.family_name,
                     'name': str(userA.id)  # TODO: fix
                 }
             }
@@ -829,7 +829,7 @@ class IntegrationTestCase(TestCase):
                     'id': str(userA.id),
                     'email': userA.email,
                     'first_name': userA.first_name,
-                    'last_name': userA.last_name,
+                    'last_name': userA.family_name,
                     'name': str(userA.id),  # TODO: fix
                     'groups': [str(groupA.id), str(groupB.id)]
                 }
@@ -844,7 +844,7 @@ class IntegrationTestCase(TestCase):
                     'id': str(userA.id),
                     'email': userA.email,
                     'first_name': userA.first_name,
-                    'last_name': userA.last_name,
+                    'last_name': userA.family_name,
                     'name': str(userA.id),  # TODO: fix
                     'groups': [{
                         'id': str(groupA.id),
@@ -866,7 +866,7 @@ class IntegrationTestCase(TestCase):
                     'id': str(userA.id),
                     'email': userA.email,
                     'first_name': userA.first_name,
-                    'last_name': userA.last_name,
+                    'last_name': userA.family_name,
                     'name': str(userA.id),  # TODO: fix
                     'groups': [{
                         'id': str(groupA.id),

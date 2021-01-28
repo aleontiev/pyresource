@@ -119,7 +119,7 @@ class User(MakeMixin, AbstractBaseUser):
 
     id = models.UUIDField(primary_key=True)
     first_name = models.TextField(null=True)
-    last_name = models.TextField(null=True)
+    family_name = models.TextField(null=True)
     email = models.TextField(unique=True)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
