@@ -34,9 +34,12 @@ class Field(Resource):
             # transform field spec dict into field array
             if (
                 id == 'resources.fields'
-                and isinstance(value, dict)
             ):
-                value = [self.parent.get_field(name) for name in value]
+                if value == '*':
+                    value = {k: True for k in self.parent.get_field_source_names()}
+
+                if isinstance(value, dict):
+                    value = [self.parent.get_field(name) for name in value]
 
             self.set_value(value)
 

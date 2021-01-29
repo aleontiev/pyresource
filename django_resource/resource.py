@@ -134,14 +134,21 @@ class Resource(object):
             )
         return self._attributes[key]
 
+    def get_field_source_names(self):
+        resolver = self.data.resolver
+        return resolver.get_field_source_names(self.source)
+
     def get_field(self, key):
         from .field import Field
         if key not in self._fields:
             fields = self.get_option('fields')
-            if not fields or key not in fields:
-                raise AttributeError(f"{key} is not a valid field of {self}")
+            if fields == '*':
+                field = {}
+            else:
+                if not fields or key not in fields:
+                    raise AttributeError(f"{key} is not a valid field of {self}")
+                field = fields[key]
 
-            field = fields[key]
             resource_id = self.get_id()
             id = f"{resource_id}.{key}"
             resolver = self.data.resolver

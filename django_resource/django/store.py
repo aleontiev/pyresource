@@ -1,6 +1,6 @@
 from django_resource.store import Store
 from .executor import DjangoExecutor
-from .resolver import DjangoSchemaResolver
+from .resolver import resolver
 
 
 class DjangoStore(Store):
@@ -8,4 +8,4 @@ class DjangoStore(Store):
         return DjangoExecutor(self)
 
     def get_resolver(self):
-        return DjangoSchemaResolver(self)
+        return resolver

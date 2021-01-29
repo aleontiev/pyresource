@@ -254,7 +254,6 @@ class DjangoExecutor(Executor):
                 return F(source)
         else:
             # functional annotation e.g. {"count": "location.users"}
-            print(f'making expression {field.source}')
             return make_expression(field.source)
 
     @classmethod

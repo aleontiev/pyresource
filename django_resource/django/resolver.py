@@ -13,8 +13,13 @@ from django_resource.utils import type_add_null
 class DjangoSchemaResolver(SchemaResolver):
     # META_FIELDS: these fields can be inferred from Django models + field source
     META_FIELDS = {'type', 'default', 'choices', 'description', 'unique', 'primary', 'index'}
-    # models cache: class property
-    _models = {}
+
+    def __init__(self, *args, **kwargs):
+        self._models = {}
+
+    def get_field_source_names(self, source):
+        source = self.get_model(source)
+        return [field.name for field in source._meta.get_fields()]
 
     def get_default(self, source, field, space=None):
         model = self.get_model(source)
@@ -144,13 +149,12 @@ class DjangoSchemaResolver(SchemaResolver):
             field = queryset.get('field')
         return model._meta.get_field(field)
 
-    @classmethod
-    def get_model(cls, source):
+    def get_model(self, source):
         if not source:
             raise SchemaResolverError('Invalid source (empty)')
 
-        source = cls.get_model_source(source)
-        models = cls._models
+        source = self.get_model_source(source)
+        models = self._models
         if source not in models:
             # resolve model at this time if provided, throwing an error
             # if it does not exist or if Django is not imported
@@ -169,3 +173,6 @@ class DjangoSchemaResolver(SchemaResolver):
                     f'Error: {e}'
                 )
         return models[source]
+
+
+resolver = DjangoSchemaResolver()

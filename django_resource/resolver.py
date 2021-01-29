@@ -2,9 +2,6 @@ from .exceptions import SchemaResolverError
 
 
 class SchemaResolver:
-    def __init__(self, store):
-        pass
-
     def get_model(self, source):
         raise NotImplementedError()
 
@@ -29,7 +26,7 @@ class SchemaResolver:
         return None
 
     def get_field_schema(self, source, field, space=None):
-        source_model = SchemaResolver.get_model_source(source)
+        source_model = self.get_model_source(source)
         if isinstance(field, dict):
             schema = field
         else:

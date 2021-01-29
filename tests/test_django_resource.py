@@ -253,6 +253,18 @@ def get_server():
             }
         }
     )
+    location = Resource(
+        id='tests.users',
+        name='users',
+        space=tests,
+        source={
+            'queryset': {
+                'model': 'tests.location',
+                'sort': 'created'
+            }
+        },
+        fields='*'
+    )
     return server
 
 
