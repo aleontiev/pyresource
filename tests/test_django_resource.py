@@ -163,7 +163,7 @@ def get_server():
         fields={
             'id': 'id',
             'first_name': 'first_name',
-            'last_name': 'family_name',
+            'last_name': 'family_name',  # renamed field
             'name': {
                 'type': 'string',
                 'source': {
@@ -171,7 +171,7 @@ def get_server():
                         'first_name',
                         '" "',
                         'family_name'
-                    ]
+                    ],
                 },
                 'can': {
                     'get': True,
@@ -549,13 +549,13 @@ class IntegrationTestCase(TestCase):
                     'email': userA.email,
                     'first_name': userA.first_name,
                     'last_name': userA.family_name,
-                    'name': str(userA.id)  # TODO: fix this
+                    'name': f'{userA.first_name} {userA.family_name}',
                 }, {
                     'id': str(userB.id),
                     'email': userB.email,
                     'first_name': userB.first_name,
                     'last_name': userB.family_name,
-                    'name': str(userB.id)  # TODO: fix this
+                    'name': f'{userB.first_name} {userB.family_name}'
                 }]
             }
         )
@@ -788,7 +788,7 @@ class IntegrationTestCase(TestCase):
                     'email': userA.email,
                     'first_name': userA.first_name,
                     'last_name': userA.family_name,
-                    'name': str(userA.id)  # TODO: fix this
+                    'name': f'{userA.first_name} {userA.family_name}'
                 }
             }
         )
@@ -811,7 +811,7 @@ class IntegrationTestCase(TestCase):
                     'email': userA.email,
                     'first_name': userA.first_name,
                     'last_name': userA.family_name,
-                    'name': str(userA.id)  # TODO: fix
+                    'name': f'{userA.first_name} {userA.family_name}'
                 }
             }
         )
@@ -833,7 +833,7 @@ class IntegrationTestCase(TestCase):
                     'email': userA.email,
                     'first_name': userA.first_name,
                     'last_name': userA.family_name,
-                    'name': str(userA.id),  # TODO: fix
+                    'name': f'{userA.first_name} {userA.family_name}',
                     'groups': [str(groupA.id), str(groupB.id)]
                 }
             }
@@ -848,7 +848,7 @@ class IntegrationTestCase(TestCase):
                     'email': userA.email,
                     'first_name': userA.first_name,
                     'last_name': userA.family_name,
-                    'name': str(userA.id),  # TODO: fix
+                    'name': f'{userA.first_name} {userA.family_name}',
                     'groups': [{
                         'id': str(groupA.id),
                         'name': groupA.name
@@ -870,7 +870,7 @@ class IntegrationTestCase(TestCase):
                     'email': userA.email,
                     'first_name': userA.first_name,
                     'last_name': userA.family_name,
-                    'name': str(userA.id),  # TODO: fix
+                    'name': f'{userA.first_name} {userA.family_name}',
                     'groups': [{
                         'id': str(groupA.id),
                         'name': groupA.name,
@@ -922,6 +922,30 @@ class IntegrationTestCase(TestCase):
                 }, {
                     'id': str(groupB.id),
                     'name': groupB.name
+                }]
+            }
+        )
+
+        prefetch_deep = users.query(
+            '?take=id,name,users&take.users=id'
+        ).get(userA.id, 'groups')
+        self.assertEqual(
+            prefetch_deep,
+            {
+                'data': [{
+                    'id': str(groupA.id),
+                    'name': groupA.name,
+                    'users': [{
+                        'id': str(userA.id),
+                    }, {
+                        'id': str(userB.id)
+                    }]
+                }, {
+                    'id': str(groupB.id),
+                    'name': groupB.name,
+                    'users': [{
+                        'id': str(userA.id)
+                    }]
                 }]
             }
         )

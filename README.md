@@ -4,11 +4,6 @@
 
 Contents:
   * [Getting Started](#getting-started)
-     * [Using DJ](#using-dj)
-        * [Installation](#installation)
-        * [Adding spaces](#adding-spaces)
-        * [Adding resources](#adding-resources)
-        * [Running the server](#running-the-server)
      * [Using pip, pipenv, or poetry](#using-pip-pipenv-or-poetry)
         * [Installation](#installation-1)
            * [Add to INSTALLED APPS](#add-to-installed-apps)
@@ -26,49 +21,6 @@ Contents:
         * [Running the server](#running-the-server-1)
 
 ## Getting Started
-
-### Using DJ
-
-#### Installation
-
-You can add this to your project with [DJ](https://djay.io), a developer utility tool for Django that wraps pyenv, virtualenv, pip, and poetry.
-It allows you to quickly add `django-resource` to your project and set up your own resources with the CLI:
-
-``` bash 
-    dj add django-resource
-```
-
-The above command will run an initialization blueprint to automatically add the code to:
-- Add `django_resource` to `settings.py:INSTALLED_APPS`
-- Add a `DJANGO_RESOURCE` settings object to `settings.py` with sane defaults
-- Create a `resources` package within your main package
-- Add a URL mount under `/resources` referencing the server
-
-New blueprints will become available to generate spaces and resources.
-
-#### Adding spaces
-
-Generate a space, passing in a name:
-
-``` bash
-    dj generate django_resource.space --name=v0
-```
-
-#### Adding resources
-
-Generate a resource, passing in a space, name, and model
-
-``` bash
-    dj generate django_resource.resource --space=v0 --name=users --model=auth.User
-```
-
-#### Running the server
-
-``` bash
-    dj serve 9000
-```
-
-Visit "http://localhost:9000/resources"
 
 ### Using pip, pipenv, or poetry
 
@@ -130,17 +82,17 @@ In your `urls.py`, add the lines:
 
 ``` python
     urlpatterns += [
-        url(r'^resources', include('yourapp.resources.urls')
+        url(r'^resources', include('yourapp.resources.urls'))
     ]
 ```
 
 At this point, you no longer need to configure any further URLs using Django.
 
-#### Adding spaces
+#### Add spaces
 
 ##### V0
 
-Create space "v0" referencing resource "clients" for storing client data:
+Create space "v0":
 
 - Create `yourapp/resources/spaces/__init__.py`
 - Create `yourapp/resources/spaces/v0/__init__.py`
@@ -148,45 +100,22 @@ Create space "v0" referencing resource "clients" for storing client data:
 
 ``` python
     from django_resource.space import Space
-    from .resources.users import users
+    from yourapp.resources.server import server
 
-    v0 = Space(name='v0')
-    v0.add(clients)
-```
-
-Modify `youapp/resources/server.py` to import and include "v0":
-
-``` python
-    ...
-    from .spaces.v0.space import v0
-
-    ...
-    server.add(v0)
+    v0 = Space(name='v0', server=server)
 ```
 
 ##### V1
 
-Create space "v1" referencing "users", a refactor of clients using the same underlying model:
+Create space "v1":
 
 Create `yourapp/resources/spaces/v1/space.py`:
 
 ``` python
     from django_resource.space import Space
-    from .resources.users import users
-    from .resources.groups import groups
+    from yourapp.resources.server import server
 
-    v1 = Space(name='v1')
-    v1.add(users)
-```
-
-Modify `youapp/resources/server.py` to import and include "v1":
-
-``` python
-    ...
-    from .spaces.v1.space import v1
-
-    ...
-    server.add(v1)
+    v1 = Space(name='v1', server=server)
 ```
 
 #### Adding resources
@@ -199,10 +128,12 @@ Create `yourapp/resources/spaces/v0/resources/users.py`:
 
 ``` python
     from django_resource.resource import Resource
+    from yourapp.spaces.v0.space import v0
 
     clients = Resource(
+        space=v0,
         name='clients',
-        model='yourapp.User'   # infer all fields from the model
+        model='yourapp.user'   # infer all fields from the model
         fields='*'             # since there is no groups resource,
                                # the "groups" relation will be rendered as an array of objects
     )
@@ -217,15 +148,11 @@ Create `yourapp/resources/spaces/v1/resources/users.py`:
 ``` python
     from django_resource.resource import Resource
     from django_resource.types import Types
-
-    def set_main_group(record, group_id):
-        # remove and re-add to have the group return last
-        record.groups.remove(group_id)
-        record.groups.add(group_id)
+    from yourapp.spaces.v1.space import v1
 
     users = Resource(
         name='users',
-        model='yourapp.User',
+        model='yourapp.user',
         fields={
             'id': 'id',                 # map individual fields to model fields
             'avatar': 'profile.avatar', # map through a has-one relationship
@@ -251,7 +178,7 @@ Create `yourapp/resources/spaces/v1/resources/users.py`:
                     "value": 2,
                     "label": "admin",
                     "can": {
-                        "=set": "request.is_staff",
+                        "set": {"true": ".request.user.is_staff"},
                     }
                 },
 
@@ -269,26 +196,16 @@ Create `yourapp/resources/spaces/v1/resources/users.py`:
                 # the lambda takes the request and returns one of the simpler types
                 "can": {
                     'get': [{"is_staff": True}, {"is_superuser": True}]      # this field can be viewed by staff or superusers (default True)
-                    'set.initial': lambda r: Q(id=r.user.pk) | Q(is_staff=False)     # this field can be initialized set by the target user or if the target is not staff
                     'set': False,  # this field can not be changed after creation
                 }
             },
-            'groups': 'groups',         # this will either have type "[@groups" (array of link to group)
-                                        # or "[{" (array of objects)
-            'mainGroup': {                 # example of a link with custom getter/setter
-                'type': "[@groups",
-                'getter': 'groups.all.-1',    # read from a custom property on the model
-                'needs': ['groups.*'],     # prefetch hinting for the custom property
-                'setter': set_main_group   # write through a custom function
-            },
+            'groups': 'groups'
         },
-        can=[
-            'get',
-            'delete',
-            'add.resource'
-        ], # default methods: get, set, edit, add, delete, inspect
+        can={
+            'get, delete, add.resource': True
+        },
         features={
-            'with': True,
+            'take': True,
             'where': True,
             'sort': True,
             'page': {
@@ -299,39 +216,9 @@ Create `yourapp/resources/spaces/v1/resources/users.py`:
                     'sum', 'count', 'max'
                 ]
             },
-            inspect: True,
-            method: True
-        },  # default features: where, with, sort, page, group, inspect, method
-        access={
-            'authenticated': {                  # for authenticated users
-                'get.record': [{                     # allow GET /users/x/ 
-                    '=id': 'me',                       # for x = current user ID
-                }, {
-                    '=record.email.not': 'record.username' # ... or any record where email != username
-                }],
-                'get.field': {                           # allow GET /users/x/*apps*
-                    '=record.id': 'me',                     # for the current user 
-                    'field.matches': '.*apps.*'             # and for any field containing "apps"
-                }
-            },
-            'is_staff': {                       # for staff users
-                'get': True,                        # allow GET /users/ and /users/x/y/
-                'add': True,                        # allow POST /users/ and /users/x/y/
-                'set.record': True,                 # allow PUT /users/x/
-                'set.field': True,                  # allow PUT /users/x/y/
-                'edit': True,                       # to PATCH /users/*/
-                'delete.record': [{                      # to DELETE /users/x/
-                    '=id': 'me',       # for x = current user
-                }, {
-                    'is_staff': False               # ... or any other non-staff user
-                }]
-            }
-        },  # if given, enables access control on this resource
-        aliases={
-            'me': 'request.user.pk',
-            'is_staff': 'request.user.is_staff',
-            'authenticated': 'request.user.is_authenticated'
-        }
+            'explain': True,
+            'action': True
+        },  # default features: where, take, sort, page, group, explain, action
     )
 ```
 

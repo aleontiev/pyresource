@@ -1,6 +1,41 @@
 import decimal
 from django.db.models import Q, F, Value, Count
-from django.db.models.functions import Now, Concat, Coalesce, Trunc
+from django.db.models.functions import (
+    Now,
+    Concat,
+    Coalesce,
+    Abs,
+    Ceil,
+    Floor,
+    Exp,
+    Ln,
+    Log,
+    Mod,
+    Pi,
+    Power,
+    Round,
+    Sin,
+    Cos,
+    Sqrt,
+    Tan,
+    Trim,
+    Lower,
+    Upper,
+    LTrim,
+    RTrim,
+    Length,
+    StrIndex,
+    Reverse,
+    NullIf,
+    Least,
+    Greatest
+)
+try:
+    # Django >= 3.0
+    from django.db.models.functions import MD5, SHA256, SHA512
+except:
+    MD5 = SHA256 = SHA512 = None
+
 from django_resource.exceptions import FilterError, ExpressionError
 from django_resource.utils import is_literal, resource_to_django
 from django_resource.translator import ResourceTranslator
@@ -152,10 +187,11 @@ comparison_operators = {
 def make_expression_operator(
     base,
     num_args=None,
+    **extra
 ):
     def method(*args):
         # optionally add other options like `output_field`
-        return base(*args)
+        return base(*args, **extra)
 
     return {
         'method': method,
@@ -163,20 +199,82 @@ def make_expression_operator(
     }
 
 concat = make_expression_operator(Concat)
-count = make_expression_operator(Count, num_args=1)
-now = make_expression_operator(Now, num_args=0)
+least = make_expression_operator(Least)
+greatest = make_expression_operator(Greatest)
 coalesce = make_expression_operator(Coalesce)
-trunc = make_expression_operator(Trunc, num_args=2)
+now = make_expression_operator(Now, num_args=0)
+pi = make_expression_operator(Pi, num_args=0)
+abs_ = make_expression_operator(Abs, num_args=1)
+ceil = make_expression_operator(Ceil, num_args=1)
+floor = make_expression_operator(Floor, num_args=1)
+exp = make_expression_operator(Exp, num_args=1)
+ln = make_expression_operator(Ln, num_args=1)
+log = make_expression_operator(Log, num_args=1)
+sin = make_expression_operator(Sin, num_args=1)
+tan = make_expression_operator(Tan, num_args=1)
+cos = make_expression_operator(Cos, num_args=1)
+sqrt = make_expression_operator(Sqrt, num_args=1)
+round_ = make_expression_operator(Round, num_args=1)
+trim = make_expression_operator(Trim, num_args=1)
+ltrim = make_expression_operator(LTrim, num_args=1)
+rtrim = make_expression_operator(RTrim, num_args=1)
+count = make_expression_operator(Count, num_args=1)
+lower = make_expression_operator(Lower, num_args=1)
+upper = make_expression_operator(Upper, num_args=1)
+length = make_expression_operator(Length, num_args=1)
+reverse = make_expression_operator(Reverse, num_args=1)
+strindex = make_expression_operator(StrIndex, num_args=1)
+mod = make_expression_operator(Mod, num_args=2)
+nullif = make_expression_operator(NullIf, num_args=2)
+power = make_expression_operator(Power, num_args=2)
+if MD5:
+    md5 = make_expression_operator(MD5, num_args=1)
+    sha256 = make_expression_operator(SHA256, num_args=1)
+    sha512 = make_expression_operator(SHA512, num_args=1)
 
 
 expression_operators = {
-    'concat': concat,
-    'count': count,
+    # logic
     'now': now,
-    'trunc': trunc,
     'coalesce': coalesce,
+    'least': least,
+    'greatest': greatest,
+    'count': count,
+    'nullif': nullif,
+    # math
+    'pi': pi,
+    'abs': abs_,
+    'ceil': ceil,
+    'floor': floor,
+    'exp': exp,
+    'ln': ln,
+    'log': log,
+    'sin': sin,
+    'tan': tan,
+    'cos': cos,
+    'sqrt': sqrt,
+    'round': round_,
+    'mod': mod,
+    'power': power,
+    # string
+    'concat': concat,
+    'strindex': strindex,
+    'lower': lower,
+    'upper': upper,
+    'length': length,
+    'reverse': reverse,
+    'trim': trim,
+    'ltrim': ltrim,
+    'rtrim': rtrim,
+    # cryptography
 }
 
+if MD5:
+    expression_operators.update({
+        'md5': md5,
+        'sha256': sha256,
+        'sha512': sha512
+    })
 
 def make_literal(value):
     return f'"{value}"'

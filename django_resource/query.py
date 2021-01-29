@@ -82,7 +82,7 @@ class Query(WhereQueryMixin):
         state = self.state
         if not level:
             return state
-        parts = level.split('.')
+        parts = level.split('.') if isinstance(level, str) else level
         for index, part in enumerate(parts):
             if 'take' not in state:
                 raise QueryValidationError(
