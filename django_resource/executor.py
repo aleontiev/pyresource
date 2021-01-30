@@ -154,17 +154,18 @@ class Executor:
         """Return True if the field should be taken as requested"""
         if take is not None:
             # if provided, use "take" to refine field selection
-            defaults = take.get("*", False)
+            take_defaults = take.get("*", False)
             should_take = take.get(field.name, None)
             if should_take is False:
                 # explicitly requested not to take this
                 return False
             if should_take is None:
                 # no explicit request: default mode
-                if field.lazy or not defaults:
+                if field.lazy or not take_defaults:
                     return False
             return True
         else:
+            # if not, take the field unless it is lazy
             return not field.lazy
 
     @classmethod

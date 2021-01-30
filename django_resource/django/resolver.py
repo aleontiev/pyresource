@@ -38,27 +38,32 @@ class DjangoSchemaResolver(SchemaResolver):
         field_name = field
         field = self.get_field(model, field_name)
 
-        if isinstance(field, models.DecimalField):
-            return type_add_null(field.null, 'number')
-        elif isinstance(field, models.FloatField):
-            return type_add_null(field.null, 'number')
-        elif isinstance(field, models.PositiveIntegerField):
-            return type_add_null(field.null, 'number')
-        elif isinstance(field, models.IntegerField):
+        if isinstance(
+            field, (
+                models.DecimalField,
+                models.FloatField,
+                models.IntegerField
+            )
+        ):
             return type_add_null(field.null, 'number')
         elif isinstance(field, models.BooleanField):
             return 'boolean'
         elif isinstance(field, models.NullBooleanField):
             return ['null', 'boolean']
-        elif isinstance(field, models.DurationField):
-            return type_add_null(field.null, 'string')
-        elif isinstance(field, (models.FileField, models.ImageField)):
-            return type_add_null(field.null, 'string')
-        elif isinstance(field, models.CharField):
-            return type_add_null(field.null, 'string')
-        elif isinstance(field, models.TextField):
-            return type_add_null(field.null, 'string')
-        elif isinstance(field, models.GenericIPAddressField):
+        elif isinstance(
+            field, (
+                models.DurationField,
+                models.ImageField,
+                models.CharField,
+                models.TextField,
+                models.UUIDField,
+                models.GenericIPAddressField,
+                models.DateTimeField,
+                models.DateField,
+                models.TimeField,
+                models.FileField,
+            )
+        ):
             return type_add_null(field.null, 'string')
         elif isinstance(field, postgres.ArrayField):
             # TODO: infer nested field type
@@ -67,28 +72,30 @@ class DjangoSchemaResolver(SchemaResolver):
             hasattr(models, 'JSONField') and isinstance(field, models.JSONField)
         ):  # Django 3.1 
             return type_add_null(field.null, ['object', 'array'])
-        elif isinstance(field, models.UUIDField):
-            return type_add_null(field.null, 'string')
-        elif isinstance(field, models.DateTimeField):
-            return type_add_null(field.null, 'string')
-        elif isinstance(field, models.DateField):
-            return type_add_null(field.null, 'string')
-        elif isinstance(field, models.TimeField):
-            return type_add_null(field.null, 'string')
-        elif isinstance(field, (models.ForeignKey, models.OneToOneField)):
+        elif isinstance(
+            field, (
+                models.ForeignKey,
+                models.OneToOneField,
+                models.ManyToManyField,
+                ManyToManyRel
+            )
+        ):
+            many = isinstance(field, (models.ManyToManyField, ManyToManyRel))
             if not space:
                 raise SchemaResolverError(f'Could not determine type for {field_name}, space is unknown')
-            related = field.related_model
-            related = '.'.join((related._meta.app_label, related._meta.model_name))
+            related_model = field.related_model
+            related = '.'.join((related_model._meta.app_label, related_model._meta.model_name))
             related = space.get_resource_for(related)
-            return type_add_null(field.null, f'@{related.name}')
-        elif isinstance(field, (models.ManyToManyField, ManyToManyRel)):
-            if not space:
-                raise SchemaResolverError(f'Could not determine type for {field_name}, space is unknown')
-            related = field.related_model
-            related = '.'.join((related._meta.app_label, related._meta.model_name))
-            related = space.get_resource_for(related)
-            return {'type': 'array', 'items': f'@{related.name}'}
+            type = f'@{related.name}' if related else self.get_pk_type(related_model)
+            return {'type': 'array', 'items': type} if many else type
+
+    def get_pk_type(self, model):
+        pk_field = model._meta.pk
+        if isinstance(pk_field, (models.TextField, models.UUIDField, models.CharField)):
+            return 'string'
+        else:
+            # TODO: really?
+            return 'number'
 
     def get_choices(self, source, field, space=None):
         model = self.get_model(source)

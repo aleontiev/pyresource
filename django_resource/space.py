@@ -48,9 +48,8 @@ class Space(Resource):
         resources = self.by_source[source]
         len_resources = len(resources)
         if len_resources == 0:
-            raise AttributeError(f'Space {self.name}: no resource for {source}')
+            return None
         elif len_resources >= 2:
-            # TODO: list all matches
             raise AttributeError(
                 f'Could not determine resource for {source}, '
                 f'found multiple possible matches: '
