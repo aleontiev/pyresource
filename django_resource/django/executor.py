@@ -9,11 +9,12 @@ from django_resource.exceptions import (
     QueryValidationError,
     QueryExecutionError,
     NotFound,
+    MethodNotAllowed
 )
 from django_resource.type_utils import get_link
 from django.db.models import Prefetch, F, Value
 from django.contrib.postgres.aggregates import ArrayAgg
-from django_resource.utils import resource_to_django
+from django_resource.utils import resource_to_django, make_literal
 from .operators import make_expression, make_filter
 from django_resource.conf import settings
 
@@ -234,7 +235,7 @@ class DjangoExecutor(Executor):
     def make_annotation(
         cls, field, **context
     ):
-        is_list = field._is_list
+        is_list = field.is_list
         source = SchemaResolver.get_field_source(field.source)
         if isinstance(source, str):
             # string annotation e.g. "user.name"
@@ -249,6 +250,8 @@ class DjangoExecutor(Executor):
                         sort = f'{source}.{sort}'
                         kwargs['ordering'] = resource_to_django(sort)
 
+                # TODO: support backends besides Postgres
+                # should be doable with custom aggregates
                 return ArrayAgg(source, **kwargs)
             else:
                 return F(source)
@@ -345,9 +348,6 @@ class DjangoExecutor(Executor):
             )
         return model.objects.all()
 
-    def get_resource(self, query, request=None, **context):
-        return self._get_resource("resource", query, request=request, **context)
-
     def _get_resources(self, type, query, request=None, prefix=None, **context):
         """Get many resources from a server or space perspective"""
         if type == "server":
@@ -386,16 +386,6 @@ class DjangoExecutor(Executor):
         if meta:
             result["meta"] = meta
         return result
-
-    def get_server(self, query, request=None, prefix=None, server=None, **context):
-        return self._get_resources(
-            "server", query, request=request, prefix=prefix, **context
-        )
-
-    def get_space(self, query, request=None, prefix=None, **context):
-        return self._get_resources(
-            "space", query, request=request, prefix=prefix, **context
-        )
 
     def _get_resource(
         self, endpoint, query, request=None, prefix=None, resource=None, **context
@@ -500,3 +490,122 @@ class DjangoExecutor(Executor):
 
     def get_field(self, query, request=None, **context):
         return self._get_resource("field", query, request=request, **context)
+
+    def get_server(self, query, request=None, prefix=None, server=None, **context):
+        return self._get_resources(
+            "server", query, request=request, prefix=prefix, **context
+        )
+
+    def get_space(self, query, request=None, prefix=None, **context):
+        return self._get_resources(
+            "space", query, request=request, prefix=prefix, **context
+        )
+
+    def get_resource(self, query, request=None, **context):
+        return self._get_resource("resource", query, request=request, **context)
+
+    def add_resource(self, query, request=None, resource=None, **context):
+        if resource is None:
+            resource = self.store.resource
+
+        if not self.can(resource, "add.resource", query, request):
+            raise Forbidden()
+
+        source = resource.source
+        resolver = self.store.resolver
+        model = resolver.get_model(source)
+
+        fields = self.select_fields(
+            resource, action="add", query=query, request=request,
+        )
+        data = query.state.get('data')
+        as_list = True
+        if not isinstance(data, list):
+            data = [data]
+            as_list = False
+
+        # build up instances
+        # TODO: support partial success on lists
+        instances = []
+        for i, dat in enumerate(data):
+            instance = model()
+            for field in fields:
+                # 1. get value for field
+                if field.name in dat:
+                    # use given value
+                    value = dat[field.name]
+                else:
+                    if field.default is not None:
+                        # use default value
+                        value = field.default
+                    elif field.is_nullable:
+                        # use null
+                        value = None
+                    else:
+                        raise BadRequest(f'Expecting to find field {field.id}')
+                # 2. validate value
+                try:
+                    field.validate(field.type, value)
+                except Exception as e:
+                    raise BadRequest(f'{value} is invalid for field {field.id} with type {field.type}')
+
+                source = resolver.get_field_source(field.source)
+                if not source:
+                    raise BadRequest(f'Cannot add field {field.id} without source')
+
+                if '.' in source:
+                    raise BadRequest(f'Cannot add through nested source {source}')
+
+                if resolver.is_field_local(model, source):
+                    # this is a "local" field that lives on the model itself
+                    setattr(instance, source, value)
+                else:
+                    # this is a "remote" field that is local to another model
+                    # which means we cannot set the relationship until after creation
+                    if not hasattr(instance, '_add_after'):
+                        instance._add_after = {}
+                    instance._add_after[field.name] = (field, value)
+
+        ids = []
+        # save instances and their new IDs
+        for instance in instances:
+            try:
+                instance.save()
+                if hasattr(instance, '_add_after'):
+                    for field, value in instance._add_after.values():
+                        source = resolver.get_field_source(field.source)
+                        # TODO: what if this isnt a many-related-manager?
+                        # is that possible for a remote field?
+                        getattr(instance, source).set(value)
+                ids.append(instance.pk)
+            except Exception as e:
+                raise BadRequest(str(e))
+
+        take = query.state.get('take', None)
+        if take:
+            # perform a get.record or get.resource to get the created records
+            query = query.action('get')
+            if as_list:
+                query = query.where({
+                    'in': [resource.id_name, make_literal(ids)]
+                })
+            else:
+                query = query.record(ids[0])
+            return query.get(request=request, **context)
+        else:
+            return True
+
+    def add_field(self, query, request=None, **context):
+        return
+
+    def add_space(self, query, request=None, **context):
+        return self._add_resources('space', query, request=request, **context)
+
+    def add_server(self, query, request=None, **context):
+        return self._add_resources('server', query, request=request, **context)
+
+    def _add_resources(self, type, query, request=None, **context):
+        return
+
+    def add_record(self, query, **context):
+        raise MethodNotAllowed()

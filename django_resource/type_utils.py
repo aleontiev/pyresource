@@ -1,6 +1,18 @@
 from .exceptions import TypeValidationError
 
 
+def is_nullable(T):
+    """Return true if T is a null type or list with none type"""
+    name = get_type_name(T)
+    names = get_type_names(T)
+    if name in {'null', 'any'} or names and 'null' in names:
+        return True
+    any_of = get_type_property(T, 'anyOf')
+    if any_of and any([is_nullable(a) for a in any_of]):
+        return True
+    return False
+
+
 def get_type_name(type):
     if isinstance(type, str):
         return type
@@ -13,7 +25,7 @@ def get_type_names(type):
     if isinstance(type, dict):
         return get_type_names(type.get('type'))
     if isinstance(type, list):
-        return type
+        return [get_type_name(t) for t in type]
     return None
 
 
@@ -113,17 +125,18 @@ def validate_boolean(type, value, throw=False):
 
 
 def validate_null(type, value, throw=False):
-    if not isinstance(value, bool):
+    if value is not None:
         if throw:
-            raise TypeValidationError(f'expecting boolean but got: {value}')
+            raise TypeValidationError(f'expecting null but got: {value}')
         return False
     return validate_multi(type, value, throw=throw)
+
 
 def validate_number(type, value, throw=True):
     if not isinstance(value, (int, float, Decimal)):
         # TODO: what about strings with numeric value?
         if throw:
-            raise TypeValidationError(f'expecting string but got: {value}')
+            raise TypeValidationError(f'expecting number but got: {value}')
         return False
     return validate_multi(type, value, throw=throw)
 
@@ -183,6 +196,14 @@ def validate_multi(type, value, throw=True):
 
 
 def validate(type, value, throw=True):
+    if value is None:
+        # special case for None
+        if not is_nullable(type):
+            if throw:
+                raise TypeValidationError(f'type {type} is not nullable')
+            return False
+        return True
+
     base_type = get_type_name(type)
 
     if base_type == 'array':

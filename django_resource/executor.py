@@ -17,23 +17,37 @@ class Executor:
         self.store = store
         self.context = context
 
-    def get(self, query, request=None, **context):
+    def add(self, query, **context):
+        return self._act('add', query, **context)
+
+    def get(self, query, **context):
         """
             Arguments:
                 query: query object
-                request: request object
         """
+        return self._act('get', query, **context)
+
+    def _act(self, name, query, **context):
         state = query.state
+        endpoint = None
         if state.get("field"):
-            return self.get_field(query, request=request, **context)
+            endpoint = 'field'
         elif state.get("record"):
-            return self.get_record(query, request=request, **context)
+            endpoint = 'record'
         elif state.get("resource"):
-            return self.get_resource(query, request=request, **context)
+            endpoint = 'resource'
         elif state.get("space"):
-            return self.get_space(query, request=request, **context)
+            endpoint = 'space'
         else:
-            return self.get_server(query, request=request, **context)
+            endpoint = 'server'
+
+        action_name = f'{name}_{endpoint}'
+        action = getattr(self, action_name, None)
+        if not action:
+            raise NotImplementError(
+                f'{self.__class__} does not implement "{action_name}"'
+            )
+        return action(query, **context)
 
     @classmethod
     def decode_cursor(self, cursor):

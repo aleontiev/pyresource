@@ -99,8 +99,8 @@ class Query(WhereQueryMixin):
 
     # features
 
-    def body(self, body):
-        return self._update({"body": body})
+    def data(self, data):
+        return self._update({"data": data})
 
     def record(self, name):
         return self._update({"record": name})

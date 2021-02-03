@@ -191,7 +191,7 @@ class Resource(object):
         return Resource(**options)
 
     @cached_property
-    def id_field(self):
+    def id_name(self):
         for field in self.fields:
             if field.primary:
                 return field.name

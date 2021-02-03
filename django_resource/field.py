@@ -1,5 +1,5 @@
 from .utils import cached_property
-from .types import is_list, get_link, validate
+from .type_utils import is_list, get_link, validate, is_nullable
 from .resource import Resource, is_resolved
 from .expression import execute
 from .schemas import FieldSchema
@@ -14,6 +14,19 @@ class Field(Resource):
         type = self.get_option('type')
         self._is_link = get_link(type)
         self._is_list = is_list(type)
+        self._is_nullable = is_nullable(type)
+
+    @property
+    def is_link(self):
+        return self._is_list
+
+    @property
+    def is_list(self):
+        return self._is_list
+
+    @property
+    def is_nullable(self):
+        return self._is_nullable
 
     def setup(self):
         if not self._setup:

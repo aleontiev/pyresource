@@ -215,6 +215,7 @@ class FieldSchema:
         "name": {"type": "string"},
         "can": {
             "type": [
+                {"type": "null"},
                 {"type": "object",},
                 {"type": "array", "items": {"type": "string"}},
             ]

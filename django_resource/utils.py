@@ -117,6 +117,18 @@ def is_literal(key):
         return True
     return False
 
+def make_literal(value):
+    if value is None:
+        return None
+    if isinstance(value, (bool, int, float, decimal.Decimal)):
+        return value
+    if isinstance(value, (list, tuple)):
+        return [make_literal(v) for v in value]
+    if isinstance(value, str):
+        return f'"{value}"'
+
+    raise ValueError(f'cannot make {value} into a literal')
+
 
 def resource_to_django(key):
     if isinstance(key, (list, tuple)):
