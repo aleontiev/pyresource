@@ -9,7 +9,7 @@ from django_resource.exceptions import (
     QueryValidationError,
     QueryExecutionError,
     NotFound,
-    MethodNotAllowed
+    MethodNotAllowed,
 )
 from django_resource.type_utils import get_link
 from django.db.models import Prefetch, F, Value
@@ -31,14 +31,11 @@ class DjangoExecutor(Executor):
         results = []
         for sort in sorts:
             desc = False
-            if sort.startswith('-'):
+            if sort.startswith("-"):
                 sort = sort[1:]
                 desc = True
             if translate:
-                sort = ResourceTranslator.translate(
-                    sort,
-                    translate
-                )
+                sort = ResourceTranslator.translate(sort, translate)
 
             sort = resource_to_django(sort)
             if desc:
@@ -75,7 +72,15 @@ class DjangoExecutor(Executor):
 
     @classmethod
     def add_queryset_sorts(
-        cls, resource, fields, queryset, query, request=None, level=None, related=None, **context,
+        cls,
+        resource,
+        fields,
+        queryset,
+        query,
+        request=None,
+        level=None,
+        related=None,
+        **context,
     ):
         """Add .order_by"""
         source = cls.get_queryset_source(resource, related=related)
@@ -97,7 +102,15 @@ class DjangoExecutor(Executor):
 
     @classmethod
     def add_queryset_filters(
-        cls, resource, fields, queryset, query, request=None, level=None, related=None, **context,
+        cls,
+        resource,
+        fields,
+        queryset,
+        query,
+        request=None,
+        level=None,
+        related=None,
+        **context,
     ):
         """Add .filter"""
         source = cls.get_queryset_source(resource, related=related)
@@ -114,11 +127,7 @@ class DjangoExecutor(Executor):
         where = state.get("where", None)
         if where:
             request_filters = cls.get_filters(
-                resource,
-                where,
-                query=query,
-                request=request,
-                translate=True
+                resource, where, query=query, request=request, translate=True
             )
 
         if default_filters:
@@ -155,9 +164,9 @@ class DjangoExecutor(Executor):
         """
         state = cls.get_query_state(query, level=level)
         prefetches = []
-        take = state.get('take', {})
-        root_field = query.state.get('field', None) if level is None else None
-        take_root = root_field is not None and query.state.get('take') is not None
+        take = state.get("take", {})
+        root_field = query.state.get("field", None) if level is None else None
+        take_root = root_field is not None and query.state.get("take") is not None
         if take or take_root:
             for field in fields:
                 take_field = take.get(field.name)
@@ -165,9 +174,13 @@ class DjangoExecutor(Executor):
                     source = SchemaResolver.get_field_source(field.source)
                     source = resource_to_django(source)
                     related = field.related
-                    related_level = f'{level}.{field.name}' if level else field.name
+                    related_level = f"{level}.{field.name}" if level else field.name
                     related_fields = cls.select_fields(
-                        related, action="get", query=query, request=request, level=related_level
+                        related,
+                        action="get",
+                        query=query,
+                        request=request,
+                        level=related_level,
                     )
                     next_queryset = cls.get_queryset(
                         resolver,
@@ -176,10 +189,12 @@ class DjangoExecutor(Executor):
                         query,
                         request=request,
                         level=related_level,
-                        **context
+                        **context,
                     )
                     prefetches.append(
-                        Prefetch(source, queryset=next_queryset, to_attr=f'.{field.name}')
+                        Prefetch(
+                            source, queryset=next_queryset, to_attr=f".{field.name}"
+                        )
                     )
 
         if prefetches:
@@ -188,14 +203,7 @@ class DjangoExecutor(Executor):
 
     @classmethod
     def add_queryset_pagination(
-        cls,
-        resource,
-        fields,
-        queryset,
-        query,
-        count=None,
-        level=None,
-        **context,
+        cls, resource, fields, queryset, query, count=None, level=None, **context,
     ):
         """Add pagination"""
         if level is not None:
@@ -232,9 +240,7 @@ class DjangoExecutor(Executor):
         return queryset
 
     @classmethod
-    def make_annotation(
-        cls, field, **context
-    ):
+    def make_annotation(cls, field, **context):
         is_list = field.is_list
         source = SchemaResolver.get_field_source(field.source)
         if isinstance(source, str):
@@ -244,11 +250,11 @@ class DjangoExecutor(Executor):
                 kwargs = {}
                 # optional ordering
                 if isinstance(field.source, dict):
-                    qs = field.source.get('queryset')
-                    sort = qs.get('sort', None) if qs else None
+                    qs = field.source.get("queryset")
+                    sort = qs.get("sort", None) if qs else None
                     if sort:
-                        sort = f'{source}.{sort}'
-                        kwargs['ordering'] = resource_to_django(sort)
+                        sort = f"{source}.{sort}"
+                        kwargs["ordering"] = resource_to_django(sort)
 
                 # TODO: support backends besides Postgres
                 # should be doable with custom aggregates
@@ -271,9 +277,9 @@ class DjangoExecutor(Executor):
         """
         annotations = {}
         state = cls.get_query_state(query, level=level)
-        take = state.get('take', None)
-        root_field = query.state.get('field', None) if level is None else None
-        root_take = query.state.get('take', None)
+        take = state.get("take", None)
+        root_field = query.state.get("field", None) if level is None else None
+        root_take = query.state.get("take", None)
         for field in fields:
             if root_field:
                 if root_take:
@@ -284,14 +290,11 @@ class DjangoExecutor(Executor):
                     # ignore fields being prefetched
                     continue
 
-            annotations[f'.{field.name}'] = cls.make_annotation(
-                field,
-                **context
-            )
+            annotations[f".{field.name}"] = cls.make_annotation(field, **context)
 
         if annotations:
             queryset = queryset.annotate(**annotations)
-        return queryset.only('pk')
+        return queryset.only("pk")
 
     @classmethod
     def add_queryset_distinct(
@@ -328,9 +331,13 @@ class DjangoExecutor(Executor):
 
     @classmethod
     def get_queryset_source(self, resource, related=None):
-        if related and isinstance(related.source, dict) and 'queryset' in related.source:
+        if (
+            related
+            and isinstance(related.source, dict)
+            and "queryset" in related.source
+        ):
             source = related.source
-            source['queryset']['model'] = resource.source
+            source["queryset"]["model"] = resource.source
         else:
             source = resource.source
         return source
@@ -412,7 +419,7 @@ class DjangoExecutor(Executor):
             # no source -> do not use queryset
             if not resource.singleton:
                 raise ResourceMisconfigured(
-                    f'{resource.id}: cannot execute "get" on a collection with no source'
+                    f'{resource.id}: cannot "get" a collection resource with no source'
                 )
             # singleton -> assume fields are all computed
             # e.g. user_id with source: ".request.user.id"
@@ -506,24 +513,24 @@ class DjangoExecutor(Executor):
 
     def explain_resource(self, query, request=None, resource=None, **context):
         resource = resource or self.store.resource
-        return {'data': {'resource': resource.serialize()}}
+        return {"data": {"resource": resource.serialize()}}
 
     def explain_record(self, query, **context):
         return self.explain_resource(query, **context)
 
     def explain_server(self, query, request=None, **context):
         server = self.store.server
-        return {'data': {'server': server.serialize()}}
+        return {"data": {"server": server.serialize()}}
 
     def explain_field(self, query, request=None, resource=None, **context):
         resource = resource or self.store.resource
-        field = query.state.get('field')
+        field = query.state.get("field")
         field = resource.fields_by_name[field]
-        return {'data': {'field': field.serialize()}}
+        return {"data": {"field": field.serialize()}}
 
     def explain_space(self, query, request=None, space=None, **context):
         space = space or self.store.space
-        return {'data': {'space': space.serialize()}}
+        return {"data": {"space": space.serialize()}}
 
     def add_resource(self, query, request=None, resource=None, **context):
         if resource is None:
@@ -539,7 +546,7 @@ class DjangoExecutor(Executor):
         fields = self.select_fields(
             resource, action="add", query=query, request=request,
         )
-        data = query.state.get('data')
+        data = query.state.get("data")
         as_list = True
         if not isinstance(data, list):
             data = [data]
@@ -563,19 +570,22 @@ class DjangoExecutor(Executor):
                         # use null
                         value = None
                     else:
-                        raise BadRequest(f'Expecting to find field {field.id}')
+                        raise BadRequest(f"Expecting to find field {field.id}")
                 # 2. validate value
                 try:
                     field.validate(field.type, value)
                 except Exception as e:
-                    raise BadRequest(f'{value} is invalid for field {field.id} with type {field.type}')
+                    raise BadRequest(
+                        f"{value} is invalid for field "
+                        f"{field.id} with type {field.type}"
+                    )
 
                 source = resolver.get_field_source(field.source)
                 if not source:
-                    raise BadRequest(f'Cannot add field {field.id} without source')
+                    raise BadRequest(f"Cannot add field {field.id} without source")
 
-                if '.' in source:
-                    raise BadRequest(f'Cannot add through nested source {source}')
+                if "." in source:
+                    raise BadRequest(f"Cannot add through nested source {source}")
 
                 if resolver.is_field_local(model, source):
                     # this is a "local" field that lives on the model itself
@@ -583,7 +593,7 @@ class DjangoExecutor(Executor):
                 else:
                     # this is a "remote" field that is local to another model
                     # which means we cannot set the relationship until after creation
-                    if not hasattr(instance, '_add_after'):
+                    if not hasattr(instance, "_add_after"):
                         instance._add_after = {}
                     instance._add_after[field.name] = (field, value)
 
@@ -592,7 +602,7 @@ class DjangoExecutor(Executor):
         for instance in instances:
             try:
                 instance.save()
-                if hasattr(instance, '_add_after'):
+                if hasattr(instance, "_add_after"):
                     for field, value in instance._add_after.values():
                         source = resolver.get_field_source(field.source)
                         # TODO: what if this isnt a many-related-manager?
@@ -602,14 +612,12 @@ class DjangoExecutor(Executor):
             except Exception as e:
                 raise BadRequest(str(e))
 
-        take = query.state.get('take', None)
+        take = query.state.get("take", None)
         if take:
             # perform a get.record or get.resource to get the created records
-            query = query.action('get')
+            query = query.action("get")
             if as_list:
-                query = query.where({
-                    'in': [resource.id_name, make_literal(ids)]
-                })
+                query = query.where({"in": [resource.id_name, make_literal(ids)]})
             else:
                 query = query.record(ids[0])
             return query.get(request=request, **context)
@@ -620,10 +628,10 @@ class DjangoExecutor(Executor):
         return
 
     def add_space(self, query, request=None, **context):
-        return self._add_resources('space', query, request=request, **context)
+        return self._add_resources("space", query, request=request, **context)
 
     def add_server(self, query, request=None, **context):
-        return self._add_resources('server', query, request=request, **context)
+        return self._add_resources("server", query, request=request, **context)
 
     def _add_resources(self, type, query, request=None, **context):
         return
