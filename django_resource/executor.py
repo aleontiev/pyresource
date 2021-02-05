@@ -2,9 +2,10 @@ import base64
 import json
 import copy
 
-from .exceptions import SerializationError, MethodNotAllowed
+from .exceptions import SerializationError, MethodNotAllowed, RequestError
 from .conf import settings
 from .resolver import SchemaResolver
+from .response import Response
 from .utils import get
 from .features import LEVELED_FEATURES, ROOT_FEATURES
 from .type_utils import get_link
@@ -50,11 +51,20 @@ class Executor:
 
         action_name = f'{name}_{endpoint}'
         action = getattr(self, action_name, None)
-        if not action:
-            raise NotImplementError(
-                f'{self.__class__} does not implement "{action_name}"'
-            )
-        return action(query, **context)
+        if context.get('response'):
+            # return as a response
+            success = {'add': 201, 'delete': 204}.get(name, 200)
+            try:
+                return Response(
+                    action(query, **context),
+                    code=success
+                )
+            except RequestError as e:
+                return Response(str(e), code=e.code)
+            except Exception as e:
+                return Response(str(e), code=500)
+        else:
+            return action(query, **context)
 
     @classmethod
     def decode_cursor(self, cursor):

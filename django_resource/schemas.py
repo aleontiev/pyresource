@@ -1,6 +1,29 @@
 from .version import version
 
 
+can = {
+    "type": {
+        "anyOf": [
+            {"type": "null"},
+            {"type": "array", "items": "string"},
+            {
+                "type": "object",
+                "additionalProperties": {"type": ["null", "boolean", "object"]},
+            },
+        ]
+    },
+    "description": "A map from action name to access rule",
+    "example": {
+        "get": True,
+        "clone.record": {
+            "or": [
+                {"not": {"<": ["updated", "created"]}},
+                {"not.in": {"location.name": ["'USA'", "'UK'"]}},
+            ]
+        },
+    },
+}
+
 class ResourceSchema:
     id = "resources"
     name = "resources"
@@ -51,28 +74,7 @@ class ResourceSchema:
             "inverse": "resource",
             "description": "The fields that make up the resource",
         },
-        "can": {
-            "type": {
-                "anyOf": [
-                    {"type": "null"},
-                    {"type": "array", "items": "string"},
-                    {
-                        "type": "object",
-                        "additionalProperties": {"type": ["null", "boolean", "object"]},
-                    },
-                ]
-            },
-            "description": "A map from action name to access rule",
-            "example": {
-                "get": True,
-                "clone.record": {
-                    "or": [
-                        {"not": {"<": ["updated", "created"]}},
-                        {"not.in": {"location.name": ["'USA'", "'UK'"]}},
-                    ]
-                },
-            },
-        },
+        "can": can,
         "parameters": {
             "type": {
                 "anyOf": [
@@ -132,6 +134,7 @@ class SpaceSchema:
             "can": {"get": True, "set": False},
         },
         "name": {"type": "string", "primary": True},
+        "can": can,
         "resources": {
             "type": {"type": "array", "items": "@resources"},
             "inverse": "space",
@@ -155,6 +158,7 @@ class ServerSchema:
             "inverse": "server",
             "default": [],
         },
+        "can": can,
         "features": {
             "type": {
                 "anyOf": [
@@ -168,7 +172,7 @@ class ServerSchema:
                 "page": {"size": 50, "max_size": 100},
                 "group": True,
                 "sort": True,
-                "explain": True,
+                "inspect": True,
                 "action": True,
             },
         },

@@ -444,11 +444,31 @@ class IntegrationTestCase(TestCase):
 
     def test_explain_server(self):
         server = get_server()
+        meta = server.serialize()
         self.assertEqual(
             server.query.explain(), {
                 'data': {
-                    'server': server.serialize()
+                    'server': meta
                 }
+            }
+        )
+        self.assertEqual(
+            meta,
+            {
+                'version': '0.0.1',
+                'url': 'http://localhost/api/',
+                'spaces': ['tests', '.'],
+                'can': None,
+                'features': {
+                    'take': True,
+                    'where': True,
+                    'page': {'size': 50, 'max_size': 100},
+                    'group': True,
+                    'sort': True,
+                    'inspect': True,
+                    'action': True
+                },
+                'types': []
             }
         )
 
@@ -504,6 +524,17 @@ class IntegrationTestCase(TestCase):
                 }
             }
         )
+
+        response = server.query.get(request=request, response=True)
+        self.assertEqual(
+            response.data, {
+                'data': {
+                    'tests': './tests/',
+                    '.': '././'
+                }
+            }
+        )
+        self.assertEqual(response.code, 200)
 
         get_all = (
             server.query

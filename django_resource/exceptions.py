@@ -50,39 +50,39 @@ class RequestError(Exception):
 
 class BadRequest(RequestError):
     """400 bad request"""
-    pass
+    code = 400
 
 
 class Unauthorized(RequestError):
     """401 unauthorized"""
-    pass
+    code = 401
 
 
 class Forbidden(RequestError):
     """403 forbidden"""
-    pass
+    code = 403
 
 
 class NotFound(RequestError):
     """404 not found"""
-    pass
+    code = 404
 
 
 class MethodNotAllowed(RequestError):
     """405 method not allowed"""
-    pass
+    code = 405
 
 
 class RequestTimeout(RequestError):
     """408 request timeout"""
-    pass
+    code = 409
 
 
 class Conflict(RequestError):
     """409 conflict"""
-    pass
+    code = 409
 
 
 class InternalServerError(RequestError):
     """500 error"""
-    pass
+    code = 500
