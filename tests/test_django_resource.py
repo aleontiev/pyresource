@@ -265,6 +265,7 @@ def get_server():
         },
         fields='*'
     )
+    server.root  # noqa
     return server
 
 
@@ -441,6 +442,52 @@ class IntegrationTestCase(TestCase):
             }
         )
 
+    def test_explain_server(self):
+        server = get_server()
+        self.assertEqual(
+            server.query.explain(), {
+                'data': {
+                    'server': server.serialize()
+                }
+            }
+        )
+
+    def test_explain_field(self):
+        server = get_server()
+        tests = server.spaces_by_name['tests']
+        users = tests.resources_by_name['users']
+        groups = users.fields_by_name['groups']
+        self.assertEqual(
+            users.query.explain(field='groups'), {
+                'data': {
+                    'field': groups.serialize()
+                }
+            }
+        )
+
+    def test_explain_resource(self):
+        server = get_server()
+        tests = server.spaces_by_name['tests']
+        users = tests.resources_by_name['users']
+        self.assertEqual(
+            users.query.explain(), {
+                'data': {
+                    'resource': users.serialize()
+                }
+            }
+        )
+
+    def test_explain_space(self):
+        server = get_server()
+        tests = server.spaces_by_name['tests']
+        self.assertEqual(
+            tests.query.explain(), {
+                'data': {
+                    'space': tests.serialize()
+                }
+            }
+        )
+
     def test_get_server(self):
         server = get_server()
 
@@ -453,6 +500,7 @@ class IntegrationTestCase(TestCase):
             server.query.get(request=request), {
                 'data': {
                     'tests': './tests/',
+                    '.': '././'
                 }
             }
         )

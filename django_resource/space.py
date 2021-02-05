@@ -26,7 +26,7 @@ class Space(Resource):
         self._by_source = None
         result = super(Space, self).__init__(**kwargs)
         # trigger a binding with server
-        assert self.server != None
+        assert self.server is not None
         return result
 
     @cached_property

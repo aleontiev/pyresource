@@ -77,7 +77,7 @@ def get_link(T):
             return get_link(items) if items else None
         if base_type == 'object':
             additional = get_type_property(T, 'additionalProperties')
-            return get_link(additionalProperties) if isinstance(additional, dict) else None
+            return get_link(additional) if isinstance(additional, dict) else None
         return None
 
     for check in get_split_types(T):

@@ -50,6 +50,9 @@ class Query(WhereQueryMixin):
     def options(self, record=None, field=None, **context):
         return self._call('options', record=record, field=field, **context)
 
+    def explain(self, record=None, field=None, **context):
+        return self._call('explain', record=record, field=field, **context)
+
     def execute(self, request=None, **context):
         executor = self.executor
         if not executor:

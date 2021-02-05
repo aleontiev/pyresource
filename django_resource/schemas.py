@@ -7,9 +7,7 @@ class ResourceSchema:
     source = None
     description = "A complex API type composed of many fields"
     space = "."
-    can = {"get": True, "inspect": True}
     parameters = None
-    base = None
     features = None
     fields = {
         "id": {
@@ -27,7 +25,7 @@ class ResourceSchema:
         "url": {
             "type": "string",
             "source": {"concat": ["space.url", "name", "'/'",]},
-            "can": {"set": False},
+            "can": {"get": True},
         },
         "name": {
             "type": "string",
@@ -70,27 +68,27 @@ class ResourceSchema:
                 "clone.record": {
                     "or": [
                         {"not": {"<": ["updated", "created"]}},
-                        {"not.in": {"location.name": ["'USA'", "'UK'"],}},
+                        {"not.in": {"location.name": ["'USA'", "'UK'"]}},
                     ]
                 },
             },
         },
         "parameters": {
-            "type": {"type": "object", "additionalProperties": {"type": "type"}},
+            "type": {
+                "anyOf": [
+                    {"type": "null"},
+                    {"type": "object", "additionalProperties": {"type": "type"}}
+                ]
+            },
             "description": "An object of custom input keys",
-            "example": {"clone.record": {"remap": {"is": "object", "of": "string"}}},
-        },
-        "bases": {
-            "type": {"type": "array", "items": "@resources"},
-            "inverse": "children",
-            "description": "The parent resource",
+            "example": {"clone.record": {"remap": {"type": "object"}}}
         },
         "features": {
             "type": ["null", "object"],
-            "description": "All features supported by this resource",
+            "description": "All features supported by this resource, with configuration",
             "example": {
-                "page": {"max": 100},
-                "show": True,
+                "page": {"size": 50, "max_size": 100},
+                "take": True,
                 "sort": True,
                 "where": False,
             },
@@ -101,9 +99,9 @@ class ResourceSchema:
             "example": {
                 "delete": {
                     "verify": {
-                        ".or": [
-                            {".request.user.id": {".equals": "owner"}},
-                            {".request.user.roles": {"contains": "superuser"}},
+                        "or": [
+                            {'=': [".request.user.id", '"owner"']},
+                            {'contains': [".request.user.roles", '"superuser"']}
                         ]
                     },
                 }
@@ -126,13 +124,12 @@ class SpaceSchema:
     name = "spaces"
     description = "spaces description"
     space = "."
-    can = ["read", "inspect"]
     fields = {
         "server": {"type": "@server", "inverse": "spaces"},
         "url": {
             "type": "string",
             "source": {"concat": ["server.url", "name", "'/'"]},
-            "can": {"set": False},
+            "can": {"get": True, "set": False},
         },
         "name": {"type": "string", "primary": True},
         "resources": {
@@ -166,31 +163,12 @@ class ServerSchema:
                 ]
             },
             "default": {
-                "with": {"max_depth": 5},
-                "where": {
-                    "max_depth": 3,
-                    "operators": [
-                        "=",  # =
-                        "!=",
-                        "<",
-                        "<=",
-                        ">=",
-                        ">",
-                        "in",  # contains
-                        "not.in",  # does not contain
-                        "range",
-                        "null",
-                        "not.null",
-                        "contains",
-                        "matches",
-                    ],
-                },
-                "page": {"max": 1000},
-                "group": {
-                    "operators": ["max", "min", "sum", "count", "average", "distinct"]
-                },
+                "take": True,
+                "where": True,
+                "page": {"size": 50, "max_size": 100},
+                "group": True,
                 "sort": True,
-                "inspect": True,
+                "explain": True,
                 "action": True,
             },
         },
@@ -223,7 +201,7 @@ class FieldSchema:
         "url": {
             "type": "string",
             "source": {"concat": ["resource.url", "name", "'/'",]},
-            "can": {"set": False},
+            "can": {"get": True, "set": False},
         },
         "description": {"type": ["null", "string"]},
         "example": {"type": "any"},

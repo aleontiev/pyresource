@@ -25,7 +25,7 @@ class Resource(object):
         assert self.Schema.name is not None
         # setup: whether or not this instance has been "setup" (actual initialization)
         self._setup = False
-        # options: the initial options 
+        # options: the initial options
         self._options = options
         # attributes: map of local attributes (using Field class)
         self._attributes = {}
@@ -35,7 +35,7 @@ class Resource(object):
         if self.get_meta('id') == 'resources':
             # resources trigger a binding with their space
             # on initialization
-            assert self.space != None
+            assert self.space is not None
 
     def __getattr__(self, key):
         if key.startswith("_"):
@@ -72,6 +72,12 @@ class Resource(object):
                 if not is_last:
                     value = field.get_value()
         return field
+
+    def serialize(self):
+        return {
+            key: self.get_property(key)
+            for key in self.get_attributes()
+        }
 
     def add(self, key, value, index=None):
         return self._get_property(key).add_value(value, index=index)
@@ -237,6 +243,7 @@ class Resource(object):
         for field in self.fields:
             patterns.append(f'{base}{field.name}/')
         return patterns
+
 
 def is_resolved(x):
     if isinstance(x, Resource):

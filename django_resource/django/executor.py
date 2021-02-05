@@ -504,6 +504,27 @@ class DjangoExecutor(Executor):
     def get_resource(self, query, request=None, **context):
         return self._get_resource("resource", query, request=request, **context)
 
+    def explain_resource(self, query, request=None, resource=None, **context):
+        resource = resource or self.store.resource
+        return {'data': {'resource': resource.serialize()}}
+
+    def explain_record(self, query, **context):
+        return self.explain_resource(query, **context)
+
+    def explain_server(self, query, request=None, **context):
+        server = self.store.server
+        return {'data': {'server': server.serialize()}}
+
+    def explain_field(self, query, request=None, resource=None, **context):
+        resource = resource or self.store.resource
+        field = query.state.get('field')
+        field = resource.fields_by_name[field]
+        return {'data': {'field': field.serialize()}}
+
+    def explain_space(self, query, request=None, space=None, **context):
+        space = space or self.store.space
+        return {'data': {'space': space.serialize()}}
+
     def add_resource(self, query, request=None, resource=None, **context):
         if resource is None:
             resource = self.store.resource

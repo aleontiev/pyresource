@@ -20,6 +20,13 @@ class Executor:
     def add(self, query, **context):
         return self._act('add', query, **context)
 
+    def explain(self, query, **context):
+        """
+            Arguments:
+                query: query object
+        """
+        return self._act('explain', query, **context)
+
     def get(self, query, **context):
         """
             Arguments:
