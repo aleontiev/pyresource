@@ -11,104 +11,43 @@ from .features import LEVELED_FEATURES, ROOT_FEATURES
 from .type_utils import get_link
 
 
-class Executor:
-    """Executes Query, returns dict response"""
+class Inspection:
+    @classmethod
+    def _get_query_state(cls, query, level=None):
+        root = query.state
+        field = root.get("field")
+        if not field:
+            return query.get_state(level)
 
-    def __init__(self, store, **context):
-        self.store = store
-        self.context = context
-
-    def add(self, query, **context):
-        return self._act('add', query, **context)
-
-    def explain(self, query, **context):
-        """
-            Arguments:
-                query: query object
-        """
-        return self._act('explain', query, **context)
-
-    def get(self, query, **context):
-        """
-            Arguments:
-                query: query object
-        """
-        return self._act('get', query, **context)
-
-    def _act(self, name, query, **context):
-        state = query.state
-        endpoint = None
-        if state.get("field"):
-            endpoint = 'field'
-        elif state.get("record"):
-            endpoint = 'record'
-        elif state.get("resource"):
-            endpoint = 'resource'
-        elif state.get("space"):
-            endpoint = 'space'
+        state = None
+        if level is None:
+            # no state at the root, use initial state
+            # remove all of the leveled features
+            state = copy.copy(root)
+            for feature in LEVELED_FEATURES:
+                state.pop(feature, None)
         else:
-            endpoint = 'server'
+            # shift th elevel, remove root features
+            level = level.split(".")[1:] or None
+            state = query.get_state(level)
+            state = copy.copy(state)
+            for feature in ROOT_FEATURES:
+                state.pop(feature, None)
 
-        action_name = f'{name}_{endpoint}'
-        action = getattr(self, action_name, None)
-        if context.get('response'):
-            # return as a response
-            success = {'add': 201, 'delete': 204}.get(name, 200)
-            try:
-                return Response(
-                    action(query, **context),
-                    code=success
-                )
-            except RequestError as e:
-                return Response(str(e), code=e.code)
-            except Exception as e:
-                return Response(str(e), code=500)
-        else:
-            return action(query, **context)
+        return state
 
     @classmethod
-    def decode_cursor(self, cursor):
-        return json.loads(base64.b64decode(cursor.decode("utf-8")))
+    def _merge_meta(cls, meta, other, name):
+        if not other:
+            return
+        meta.update(other)
 
-    @classmethod
-    def encode_cursor(self, cursor):
-        return base64.b64encode(json.dumps(cursor).encode("utf-8"))
 
-    @classmethod
-    def get_next_page(cls, query, offset=None, level=None):
-        # TODO: support keyset pagination
-        state = cls.get_query_state(query, level=level)
-        page = state.get("page", {})
-        size = int(page.get("size", settings.DEFAULT_PAGE_SIZE))
-        page = page.get("after", None)
-        if page is not None:
-            page = cls.decode_cursor(page)
-
-        # offset-limit pagination
-        if offset is None:
-            offset = size
-        if page is None:
-            next_offset = offset
-        else:
-            next_offset = page.get("offset", 0) + offset
-        return cls.encode_cursor({"offset": next_offset})
-
-    @classmethod
-    def resolve_resource(cls, base_resource, name):
-        space = base_resource.space
-        if not space:
-            raise SerializationError(
-                f'Cannot lookup resource named "{name}" from base resource "{base_resource.id}"'
-            )
-        resource = space.resources_by_name.get(name)
-        if not resource:
-            raise SerializationError(f'Resource "{name}" not found')
-        return resource
-
+class Selection:
     # TODO: @cache results by all arguments to avoid recomputing this across different phases
     # of the same request (e.g. serialization and query building)
     @classmethod
-    def select_fields(cls, resource, action, level=None, query=None, request=None):
+    def _take_fields(cls, resource, action, level=None, query=None, request=None):
         """Get a subset of a resource's fields to be used for an action
 
         Arguments:
@@ -123,14 +62,14 @@ class Executor:
         fields = resource.fields
         # if this is a field-oriented request
         take_field = query.state.get("field")
-        state = cls.get_query_state(query, level=level)
+        state = cls._get_query_state(query, level=level)
         take = state.get("take")
 
         for field in fields:
             if take_field and level is None:
                 # take this field only
                 if field.name == take_field:
-                    if not cls.can_take_field(
+                    if not cls._can_take_field(
                         field, action, query=query, request=request
                     ):
                         raise MethodNotAllowed()
@@ -140,48 +79,18 @@ class Executor:
             # many fields
 
             # use query filters (take)
-            if not cls.should_take_field(field, take):
+            if not cls._should_take_field(field, take):
                 continue
 
             # use permission filters (can)
             # pass in the record, query, and request as context
-            if not cls.can_take_field(field, action, query=query, request=request):
+            if not cls._can_take_field(field, action, query=query, request=request):
                 continue
             result.append(field)
         return result
 
     @classmethod
-    def can(cls, resource, action, query=None, request=None):
-        """Whether or not the given action is authorized
-
-        Arguments:
-            resource: a Resource
-            action: an endpoint-qualified string action (e.g. "get.resource")
-            query: a Query
-            request: a Django request
-        Returns:
-            True: the action is authorized for all records
-            False: the action is not authorized
-            dict: the action may be authorized for some records
-                e.g: {'true': 'is_active'}
-        """
-        return True  # TODO
-
-    @classmethod
-    def can_take_field(cls, field, action, query=None, request=None):
-        can = field.can
-        if can is not None:
-            if action in can:
-                can = can[action]
-                if isinstance(can, dict):
-                    can = execute(can, {"request": request, "query": query.state})
-                return can
-            return False
-        else:
-            return True
-
-    @classmethod
-    def should_take_field(cls, field, take):
+    def _should_take_field(cls, field, take):
         """Return True if the field should be taken as requested"""
         if take is not None:
             # if provided, use "take" to refine field selection
@@ -199,15 +108,49 @@ class Executor:
             # if not, take the field unless it is lazy
             return not field.lazy
 
+
+class Authorization:
     @classmethod
-    def to_json_value(self, value):
+    def _can(cls, resource, action, query=None, request=None):
+        """Whether or not the given action is authorized
+
+        Arguments:
+            resource: a Resource
+            action: an endpoint-qualified string action (e.g. "get.resource")
+            query: a Query
+            request: a Django request
+        Returns:
+            True: the action is authorized for all records
+            False: the action is not authorized
+            dict: the action may be authorized for some records
+                e.g: {'true': 'is_active'}
+        """
+        return True  # TODO
+
+    @classmethod
+    def _can_take_field(cls, field, action, query=None, request=None):
+        can = field.can
+        if can is not None:
+            if action in can:
+                can = can[action]
+                if isinstance(can, dict):
+                    can = execute(can, {"request": request, "query": query.state})
+                return can
+            return False
+        else:
+            return True
+
+
+class Serialization:
+    @classmethod
+    def _to_json_value(self, value):
         """Get a JSON-compatible representation of the given value"""
         if isinstance(value, list):
-            return [self.to_json_value(v) for v in value]
+            return [self._to_json_value(v) for v in value]
 
         if isinstance(value, dict):
             return {
-                self.to_json_value(k): self.to_json_value(v) for k, v in value.items()
+                self._to_json_value(k): self._to_json_value(v) for k, v in value.items()
             }
 
         if isinstance(value, (bool, str, int, float)) or value is None:
@@ -232,7 +175,7 @@ class Executor:
         return str(value)
 
     @classmethod
-    def serialize_value(cls, value):
+    def _serialize_value(cls, value):
         """Shallow serialization
 
         Return serialized representation of record or list of records;
@@ -243,34 +186,22 @@ class Executor:
             value = [getattr(v, "pk", v) for v in value]
         else:
             value = getattr(value, "pk", value)
-        return cls.to_json_value(value)
+        return cls._to_json_value(value)
 
     @classmethod
-    def get_query_state(cls, query, level=None):
-        root = query.state
-        field = root.get('field')
-        if not field:
-            return query.get_state(level)
-
-        state = None
-        if level is None:
-            # no state at the root, use initial state
-            # remove all of the leveled features
-            state = copy.copy(root)
-            for feature in LEVELED_FEATURES:
-                state.pop(feature, None)
-        else:
-            # shift th elevel, remove root features
-            level = level.split(".")[1:] or None
-            state = query.get_state(level)
-            state = copy.copy(state)
-            for feature in ROOT_FEATURES:
-                state.pop(feature, None)
-
-        return state
+    def _resolve_resource(cls, base_resource, name):
+        space = base_resource.space
+        if not space:
+            raise SerializationError(
+                f'Cannot lookup resource named "{name}" from base resource "{base_resource.id}"'
+            )
+        resource = space.resources_by_name.get(name)
+        if not resource:
+            raise SerializationError(f'Resource "{name}" not found')
+        return resource
 
     @classmethod
-    def serialize(
+    def _serialize(
         cls,
         resource,
         fields,
@@ -294,8 +225,8 @@ class Executor:
             Serialized representation of record or list of records
         """
         results = []
-        state = cls.get_query_state(query, level=level)
-        field_name = query.state.get('field', None)
+        state = cls._get_query_state(query, level=level)
+        field_name = query.state.get("field", None)
         page_size = state.get("page", {}).get("size", settings.DEFAULT_PAGE_SIZE)
         take = state.get("take")
 
@@ -321,17 +252,21 @@ class Executor:
                     # get from record provided
                     # use special .name properties that are added as annotations
                     try:
-                        value = getattr(record, f'.{name}')
+                        value = getattr(record, f".{name}")
                         use_context = False
                     except AttributeError as e:
-                        if f'.{name}' not in str(e):
+                        if f".{name}" not in str(e):
                             raise
 
                 if use_context:
                     # get from context (request/query data)
                     source = SchemaResolver.get_field_source(field.source) or name
                     if source.startswith("."):
-                        context = {"fields": record, "request": request, "query": query.state}
+                        context = {
+                            "fields": record,
+                            "request": request,
+                            "query": query.state,
+                        }
                         source = source[1:]
                     else:
                         if record is None:
@@ -351,7 +286,7 @@ class Executor:
                     # deep serialization
                     link = get_link(type)
                     if link:
-                        related = cls.resolve_resource(resource, link)
+                        related = cls._resolve_resource(resource, link)
                         if level is None:
                             related_level = name
                         else:
@@ -363,14 +298,14 @@ class Executor:
                                 # and do not render the next element
                                 value = value[:page_size]
 
-                        related_fields = cls.select_fields(
+                        related_fields = cls._take_fields(
                             related,
                             action="get",
                             level=related_level,
                             query=query,
                             request=request,
                         )
-                        value = cls.serialize(
+                        value = cls._serialize(
                             related,
                             related_fields,
                             level=related_level,
@@ -385,10 +320,10 @@ class Executor:
                             f"Error: type has no link"
                         )
                     else:
-                        value = cls.serialize_value(value)
+                        value = cls._serialize_value(value)
                 else:
                     # shallow serialization
-                    value = cls.serialize_value(value)
+                    value = cls._serialize_value(value)
 
                 result[name] = value
 
@@ -402,8 +337,88 @@ class Executor:
             results = results[0]
         return results
 
+
+class Pagination:
     @classmethod
-    def merge_meta(cls, meta, other, name):
-        if not other:
-            return
-        meta.update(other)
+    def _decode_cursor(self, cursor):
+        return json.loads(base64.b64decode(cursor.decode("utf-8")))
+
+    @classmethod
+    def _encode_cursor(self, cursor):
+        return base64.b64encode(json.dumps(cursor).encode("utf-8"))
+
+    @classmethod
+    def _get_next_page(cls, query, offset=None, level=None):
+        # TODO: support keyset pagination
+        state = cls._get_query_state(query, level=level)
+        page = state.get("page", {})
+        size = int(page.get("size", settings.DEFAULT_PAGE_SIZE))
+        page = page.get("after", None)
+        if page is not None:
+            page = cls._decode_cursor(page)
+
+        # offset-limit pagination
+        if offset is None:
+            offset = size
+        if page is None:
+            next_offset = offset
+        else:
+            next_offset = page.get("offset", 0) + offset
+        return cls._encode_cursor({"offset": next_offset})
+
+
+class Dispatch:
+    def _act(self, name, query, **context):
+        state = query.state
+        endpoint = None
+        if state.get("field"):
+            endpoint = "field"
+        elif state.get("record"):
+            endpoint = "record"
+        elif state.get("resource"):
+            endpoint = "resource"
+        elif state.get("space"):
+            endpoint = "space"
+        else:
+            endpoint = "server"
+
+        action_name = f"{name}_{endpoint}"
+        action = getattr(self, action_name, None)
+        if context.get("response"):
+            # return as a response
+            success = {"add": 201, "delete": 204}.get(name, 200)
+            try:
+                return Response(action(query, **context), code=success)
+            except RequestError as e:
+                return Response(str(e), code=e.code)
+            except Exception as e:
+                return Response(str(e), code=500)
+        else:
+            return action(query, **context)
+
+
+class Executor(
+    Dispatch, Inspection, Selection, Serialization, Authorization, Pagination
+):
+    """Executes Query, returns dict response"""
+
+    def __init__(self, store, **context):
+        self.store = store
+        self.context = context
+
+    def add(self, query, **context):
+        return self._act("add", query, **context)
+
+    def explain(self, query, **context):
+        """
+            Arguments:
+                query: query object
+        """
+        return self._act("explain", query, **context)
+
+    def get(self, query, **context):
+        """
+            Arguments:
+                query: query object
+        """
+        return self._act("get", query, **context)

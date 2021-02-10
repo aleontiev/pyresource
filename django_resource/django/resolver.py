@@ -2,7 +2,7 @@ from django_resource.exceptions import SchemaResolverError
 
 from django.db import models
 from django.db.models.fields import NOT_PROVIDED
-from django.db.models.fields.related import ManyToManyRel
+from django.db.models.fields.related import ManyToManyRel, ManyToOneRel
 
 from django.contrib.postgres import fields as postgres
 
@@ -20,6 +20,17 @@ class DjangoSchemaResolver(SchemaResolver):
     def get_field_source_names(self, source):
         source = self.get_model(source)
         return [field.name for field in source._meta.get_fields()]
+
+    def is_field_local(self, model, source):
+        # may raise FieldDoesNotExist
+        field = self.get_field(model, source)
+        if isinstance(field, (
+            ManyToManyRel,
+            ManyToOneRel,
+            ManyToManyField
+        )):
+            return False
+        return True
 
     def get_default(self, source, field, space=None):
         model = self.get_model(source)
@@ -77,7 +88,8 @@ class DjangoSchemaResolver(SchemaResolver):
                 models.ForeignKey,
                 models.OneToOneField,
                 models.ManyToManyField,
-                ManyToManyRel
+                ManyToManyRel,
+                ManyToOneRel
             )
         ):
             many = isinstance(field, (models.ManyToManyField, ManyToManyRel))
