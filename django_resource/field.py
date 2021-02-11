@@ -133,7 +133,6 @@ class Field(Resource):
         try:
             return validate(type, value)
         except TypeValidationError as e:
-            print(f"Field {self.id} validation failed: {e}")
             raise
 
     def set_value(self, value, set_inverse=True):

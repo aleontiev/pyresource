@@ -109,7 +109,27 @@ def coerce_query_values(values, singletons=True):
     return values[0] if single else values
 
 
+def unliteral(key):
+    if isinstance(key, dict):
+        return {k: unliteral(v) for k, v in key.items()}
+    if isinstance(key, list):
+        return [unliteral(x) for x in key]
+    if isinstance(key, str):
+        if is_literal(key):
+            return key[1:-1]
+        return key
+    return key
+
+
 def is_literal(key):
+    if isinstance(key, dict):
+        # dicts with 1 key are all considered expressions
+        # unless they are inside a "literal" expression
+        return len(key) > 1
+
+    if isinstance(key, list):
+        return all([is_literal(x) for x in key])
+
     if not isinstance(key, str):
         return True
     # for strings

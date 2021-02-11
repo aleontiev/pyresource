@@ -21,22 +21,22 @@ from .utils import Request, Fixture
 # - authorization
 # - custom actions
 
+
 def get_fixture():
-    userA = User.make(family_name='A', first_name='Alex')
-    userB = User.make(family_name='B', first_name='Bay')
-    userC = User.make(is_active=False, first_name='Inactive', family_name='I')
-    groupA = Group.make(name='A')
-    groupB = Group.make(name='B')
-    groupC = Group.make(name='C')
+    userA = User.make(family_name="A", first_name="Alex", is_superuser=True)
+    userB = User.make(family_name="B", first_name="Bay")
+    userC = User.make(is_active=False, first_name="Inactive", family_name="I")
+    groupA = Group.make(name="A")
+    groupB = Group.make(name="B")
+    groupC = Group.make(name="C")
     userA.groups.set([groupA, groupB])
     userB.groups.set([groupA])
-    return Fixture(
-        users=[userA, userB, userC],
-        groups=[groupA, groupB, groupC]
-    )
+    return Fixture(users=[userA, userB, userC], groups=[groupA, groupB, groupC])
 
 
 server = None
+
+
 def get_server():
     global server
     if server is not None:
@@ -47,19 +47,17 @@ def get_server():
     # social network integration setup
     # one space: test
     # three collections:
-    # - users 
-    # - groups 
-    # - location 
+    # - users
+    # - groups
+    # - location
     # one singleton:
     # - session (for authentication)
-    server = Server(
-        url='http://localhost/api/',
-    )
+    server = Server(url="http://localhost/api/",)
 
-    tests = Space(name='tests', server=server)
+    tests = Space(name="tests", server=server)
 
     def login(resource, request, query):
-        api_key = query.state('body').get('api_key')
+        api_key = query.state("body").get("api_key")
         api_key = json.loads(str(base64.b64decode(api_key)))
         if authenticate(username, password):
             pass
@@ -71,199 +69,130 @@ def get_server():
         pass
 
     session = Resource(
-        id='tests.session',
-        name='session',
+        id="tests.session",
+        name="session",
         space=tests,
         singleton=True,
-        can={
-            'login': True,
-            'logout': True,
-            'get': True
-        },
-        fields={
-            "user": {
-                "type": ["null", "@users"],
-                "source": ".request.user"
-            },
-        },
+        can={"login": True, "logout": True, "get": True},
+        fields={"user": {"type": ["null", "@users"], "source": ".request.user"},},
         actions={
-            'login': {
-                'method': login,
-                'fields': {
-                    "username": {
-                        "type": "string",
-                        "can": {'set': True}
-                    },
-                    "password": {
-                        "type": "string",
-                        "can": {'set': True}
-                    },
-                    "status": {
-                        "type": "string",
-                        "can": {'get': True}
-                    }
-                }
+            "login": {
+                "method": login,
+                "fields": {
+                    "username": {"type": "string", "can": {"set": True}},
+                    "password": {"type": "string", "can": {"set": True}},
+                    "status": {"type": "string", "can": {"get": True}},
+                },
             },
-            'logout': logout
-        }
+            "logout": logout,
+        },
     )
     groups = Resource(
-        id='tests.groups',
-        name='groups',
-        source={
-            'queryset': {
-                'model': 'tests.group',
-                'where': {
-                    'true': 'is_active'
-                }
-            }
-        },
+        id="tests.groups",
+        name="groups",
+        source={"queryset": {"model": "tests.group", "where": {"true": "is_active"}}},
         space=tests,
         fields={
-            'id': 'id',
-            'name': 'name',
-            'users': {
-                'source': {
-                    'queryset': {
-                        'field': 'users',
-                        'sort': 'created'
-                    }
-                },
-                'lazy': True,
-                'can': {'get': True},
+            "id": "id",
+            "name": "name",
+            "users": {
+                "source": {"queryset": {"field": "users", "sort": "created"}},
+                "lazy": True,
+                "can": {"get": True},
             },
-            'created': {
-                'lazy': True,
-                'can': {'get': True}
-            },
-            'updated': {
-                'lazy': True,
-                'can': {'get': True}
-            }
+            "created": {"lazy": True, "can": {"get": True}},
+            "updated": {"lazy": True, "can": {"get": True}},
         },
         can={
-            '*': {'true': '.request.user.is_superuser'},
-            'get': {'=': ['users', '.request.user.id']},
-        }
+            "*": {"true": ".request.user.is_superuser"},
+            "get": {"=": ["users", ".request.user.id"]},
+        },
     )
 
     users = Resource(
-        id='tests.users',
-        name='users',
+        id="tests.users",
+        name="users",
         source={
-            'queryset': {
-                'model': 'tests.user',
-                'where': {
-                    'true': 'is_active'
-                },
-                'sort': 'created'
+            "queryset": {
+                "model": "tests.user",
+                "where": {"true": "is_active"},
+                "sort": "created",
             }
         },
         space=tests,
         fields={
-            'id': 'id',
-            'first_name': 'first_name',
-            'last_name': 'family_name',  # renamed field
-            'name': {
-                'type': 'string',
-                'source': {
-                    'concat': [
-                        'first_name',
-                        '" "',
-                        'family_name'
-                    ],
-                },
-                'can': {
-                    'get': True,
-                }
+            "id": "id",
+            "first_name": "first_name",
+            "last_name": "family_name",  # renamed field
+            "name": {
+                "type": "string",
+                "source": {"concat": ["first_name", '" "', "family_name"],},
+                "can": {"get": True,},
             },
-            'email': 'email',
-            'groups': {
-                'lazy': True,
-                'can': {
-                    'set': {'=': ['.query.action', '"add"']},
+            "email": "email",
+            "num_groups": {
+                "source": {
+                    "count": "groups"
+                },
+                "type": "number",
+                "lazy": True,
+                "can": {"get": True}
+            },
+            "groups": {
+                "lazy": True,
+                "can": {
+                    "set": {"=": [".query.action", '"add"']},
                     # can only set if the new value is smaller {'>': ['.changes.groups', 'groups']}
                     # can only set if name is not changing {'null': '.changes.name'}
-                    'add': True,
-                    'get': True,
+                    "add": True,
+                    "get": True,
+                    "prefetch": True,
                 },
-                'source': {
-                    'queryset': {
-                        'field': 'groups',
-                        'sort': 'name',
-                        'where': {
-                            'true': 'is_active'
-                        }
+                "source": {
+                    "queryset": {
+                        "field": "groups",
+                        "sort": "name",
+                        "where": {"true": "is_active"},
                     }
+                },
+            },
+            "is_superuser": {
+                "can": {
+                    "get": {"true": ".request.user.is_superuser"},
+                    "set": {"true": ".request.user.is_superuser"}
                 }
             },
-            'created': {
-                'lazy': True,
-                'default': {
-                    'now': {}
-                },
-                'can': {'get': True}
-            },
-            'updated': {
-                'lazy': True,
-                'default': {
-                    'now': {}
-                },
-                'can': {'get': True}
-            }
+            "created": {"lazy": True, "default": {"now": {}}, "can": {"get": True}},
+            "updated": {"lazy": True, "default": {"now": {}}, "can": {"get": True}},
         },
         can={
-            '*': {'true': '.request.user.is_superuser'},
-            'get, change-password': {'=': ['id', '.request.user.id']}
+            "*": {"true": ".request.user.is_superuser"},
+            "get, change-password": {"=": ["id", ".request.user.id"]},
         },
         before={
-            'change-password': {
-                'check': {
-                    '=': [
-                        'confirm_password',
-                        'new_password'
-                    ]
-                }
-            }
+            "change-password": {"check": {"=": ["confirm_password", "new_password"]}}
         },
         actions={
-            'change-password': {
-                'method': change_password,
-                'fields': {
-                    'old_password': {
-                        'type': 'string',
-                        'can': {'set': True}
+            "change-password": {
+                "method": change_password,
+                "fields": {
+                    "old_password": {"type": "string", "can": {"set": True}},
+                    "new_password": {
+                        "type": {"type": "string", "min_length": 10,},
+                        "can": {"set": True},
                     },
-                    'new_password': {
-                        'type': {
-                            'type': 'string',
-                            'min_length': 10,
-                        },
-                        'can': {'set': True}
-                    },
-                    'confirm_password': {
-                        'type': 'string',
-                        'can': {'set': True}
-                    },
-                    'changed': {
-                        'type': 'boolean',
-                        'can': {'get': True}
-                    }
-                }
-            }
-        }
-    )
-    location = Resource(
-        id='tests.users',
-        name='users',
-        space=tests,
-        source={
-            'queryset': {
-                'model': 'tests.location',
-                'sort': 'created'
+                    "confirm_password": {"type": "string", "can": {"set": True}},
+                    "changed": {"type": "boolean", "can": {"get": True}},
+                },
             }
         },
-        fields='*'
+    )
+    location = Resource(
+        id="tests.users",
+        name="users",
+        space=tests,
+        source={"queryset": {"model": "tests.location", "sort": "created"}},
+        fields="*",
     )
     server.root  # noqa
     return server
@@ -273,103 +202,77 @@ class IntegrationTestCase(TestCase):
     maxDiff = None
 
     def test_version(self):
-        self.assertEqual(__version__, '0.1.0')
+        self.assertEqual(__version__, "0.1.0")
 
     def test_setup_server(self):
         server = get_server()
-        tests = server.spaces_by_name['tests']
-        users = tests.resources_by_name['users']
-        groups = tests.resources_by_name['groups']
-        session = tests.resources_by_name['session']
+        tests = server.spaces_by_name["tests"]
+        users = tests.resources_by_name["users"]
+        groups = tests.resources_by_name["groups"]
+        session = tests.resources_by_name["session"]
 
-        self.assertEqual(groups.id, 'tests.groups')
-        self.assertEqual(users.id, 'tests.users')
-        self.assertEqual(users.space.name, 'tests')
+        self.assertEqual(groups.id, "tests.groups")
+        self.assertEqual(users.id, "tests.users")
+        self.assertEqual(users.space.name, "tests")
         self.assertEqual(users.space, tests)
-        self.assertEqual(server.url, 'http://localhost/api/')
-        self.assertEqual(tests.url, 'http://localhost/api/tests/')
-        self.assertEqual(users.url, 'http://localhost/api/tests/users/')
+        self.assertEqual(server.url, "http://localhost/api/")
+        self.assertEqual(tests.url, "http://localhost/api/tests/")
+        self.assertEqual(users.url, "http://localhost/api/tests/users/")
 
-        query1 = tests.query(
-            'users'
-            '?take=id,name'
-            '&page:size=10'
-            '&action=get'
-        )
+        query1 = tests.query("users" "?take=id,name" "&page:size=10" "&action=get")
         query2 = (
-            tests.query
-            .resource('users')
-            .take('id', 'name')
-            .page(size=10)
-            .action('get')
+            tests.query.resource("users").take("id", "name").page(size=10).action("get")
         )
         self.assertEqual(query1.state, query2.state)
 
         query3 = tests.query(
-            '?take.users=*,-name'
-            '&take.groups=id'
-            '&page.users:size=5'
-            '&page.users:after=ABC'
-            '&sort.groups=-created,id'
-            '&where.groups:updated:gte=created'
+            "?take.users=*,-name"
+            "&take.groups=id"
+            "&page.users:size=5"
+            "&page.users:after=ABC"
+            "&sort.groups=-created,id"
+            "&where.groups:updated:gte=created"
             '&where.users:name:contains="Joe"'
         )
         query4 = (
-            tests.query
-            .take.users('*', '-name')
-            .page.users(after='ABC', size=5)
-            .take.groups('id')
-            .sort.groups('-created', 'id')
-            .where.groups({'gte': ['updated', 'created']})
-            .where.users({'contains': ['name', '"Joe"']})
+            tests.query.take.users("*", "-name")
+            .page.users(after="ABC", size=5)
+            .take.groups("id")
+            .sort.groups("-created", "id")
+            .where.groups({"gte": ["updated", "created"]})
+            .where.users({"contains": ["name", '"Joe"']})
         )
         self.assertEqual(query3.state, query4.state)
-        self.assertEqual(query3.state, {
-            'take': {
-                'groups': {
-                    'sort': ['-created', 'id'],
-                    'take': {
-                        'id': True
+        self.assertEqual(
+            query3.state,
+            {
+                "take": {
+                    "groups": {
+                        "sort": ["-created", "id"],
+                        "take": {"id": True},
+                        "where": {"gte": ["updated", "created"]},
                     },
-                    'where': {
-                        'gte': ['updated', 'created']
-                    }
+                    "users": {
+                        "page": {"after": "ABC", "size": 5},
+                        "take": {"*": True, "name": False},
+                        "where": {"contains": ["name", '"Joe"']},
+                    },
                 },
-                'users': {
-                    'page': {
-                        'after': 'ABC',
-                        'size': 5
-                    },
-                    'take': {
-                        '*': True,
-                        'name': False
-                    },
-                    'where': {
-                        'contains': ['name', '"Joe"']
-                    }
-                }
+                "space": "tests",
             },
-            'space': 'tests'
-        })
-
-        query5 = tests.query(
-            '/users/1/groups'
-            '?take=id,name'
         )
+
+        query5 = tests.query("/users/1/groups" "?take=id,name")
         query6 = (
-            tests.query
-            .resource('users')
-            .record('1')
-            .field('groups')
-            .take('id', 'name')
+            tests.query.resource("users").record("1").field("groups").take("id", "name")
         )
         self.assertEqual(query5.state, query6.state)
-        id = users.get_field('id')
+        id = users.get_field("id")
         self.assertEqual(id.resource, users)
 
     def test_get_space(self):
         server = get_server()
-        tests = server.spaces_by_name['tests']
+        tests = server.spaces_by_name["tests"]
 
         fixture = get_fixture()
         userA, userB, userC = fixture.users
@@ -377,136 +280,105 @@ class IntegrationTestCase(TestCase):
         request = Request(userA)
 
         self.assertEqual(
-            tests.query.get(request=request), {
-                'data': {
-                    'users': './users/',
-                    'groups': './groups/',
-                    'session': './session/'
+            tests.query.get(request=request),
+            {
+                "data": {
+                    "users": "./users/",
+                    "groups": "./groups/",
+                    "session": "./session/",
                 }
-            }
+            },
         )
 
         get_all = (
-            tests.query
-            .take.users('id')
-            .take.groups('id')
-            .take.session('*')
+            tests.query.take.users("id")
+            .take.groups("id")
+            .take.session("*")
             .get(request=request)
         )
         self.assertEqual(
-            get_all, {
-                'data': {
-                    'users': [{
-                        'id': str(userA.id),
-                    }, {
-                        'id': str(userB.id)
-                    }],
-                    'groups': [{
-                        'id': str(groupA.id)
-                    }, {
-                        'id': str(groupB.id)
-                    }, {
-                        'id': str(groupC.id)
-                    }],
-                    'session': {
-                        'user': str(userA.id)
-                    }
+            get_all,
+            {
+                "data": {
+                    "users": [{"id": str(userA.id),}, {"id": str(userB.id)}],
+                    "groups": [
+                        {"id": str(groupA.id)},
+                        {"id": str(groupB.id)},
+                        {"id": str(groupC.id)},
+                    ],
+                    "session": {"user": str(userA.id)},
                 }
-            }
+            },
         )
 
         get_with_filters = (
-            tests.query
-            .take.users('id')
-            .take.users.groups('id')
-            .where.users({'=': ['id', f'"{userA.id}"']})
-            .take.groups('id')
-            .where.groups({'=': ['id', f'"{groupA.id}"']})
+            tests.query.take.users("id")
+            .take.users.groups("id")
+            .where.users({"=": ["id", f'"{userA.id}"']})
+            .take.groups("id")
+            .where.groups({"=": ["id", f'"{groupA.id}"']})
             .get(request=request)
         )
         self.assertEqual(
-            get_with_filters, {
-                'data': {
-                    'users': [{
-                        'id': str(userA.id),
-                        'groups': [{
-                            'id': str(groupA.id)
-                        }, {
-                            'id': str(groupB.id)
-                        }]
-                    }],
-                    'groups': [{
-                        'id': str(groupA.id)
-                    }],
+            get_with_filters,
+            {
+                "data": {
+                    "users": [
+                        {
+                            "id": str(userA.id),
+                            "groups": [{"id": str(groupA.id)}, {"id": str(groupB.id)}],
+                        }
+                    ],
+                    "groups": [{"id": str(groupA.id)}],
                 }
-            }
+            },
         )
 
     def test_explain_server(self):
         server = get_server()
         meta = server.serialize()
-        self.assertEqual(
-            server.query.explain(), {
-                'data': {
-                    'server': meta
-                }
-            }
-        )
+        self.assertEqual(server.query.explain(), {"data": {"server": meta}})
         self.assertEqual(
             meta,
             {
-                'version': '0.0.1',
-                'url': 'http://localhost/api/',
-                'spaces': ['tests', '.'],
-                'can': None,
-                'features': {
-                    'take': True,
-                    'where': True,
-                    'page': {'size': 50, 'max_size': 100},
-                    'group': True,
-                    'sort': True,
-                    'inspect': True,
-                    'action': True
+                "version": "0.0.1",
+                "url": "http://localhost/api/",
+                "spaces": ["tests", "."],
+                "can": None,
+                "features": {
+                    "take": True,
+                    "where": True,
+                    "page": {"size": 50, "max_size": 100},
+                    "group": True,
+                    "sort": True,
+                    "inspect": True,
+                    "action": True,
                 },
-                'types': []
-            }
+                "types": [],
+            },
         )
 
     def test_explain_field(self):
         server = get_server()
-        tests = server.spaces_by_name['tests']
-        users = tests.resources_by_name['users']
-        groups = users.fields_by_name['groups']
+        tests = server.spaces_by_name["tests"]
+        users = tests.resources_by_name["users"]
+        groups = users.fields_by_name["groups"]
         self.assertEqual(
-            users.query.explain(field='groups'), {
-                'data': {
-                    'field': groups.serialize()
-                }
-            }
+            users.query.explain(field="groups"), {"data": {"field": groups.serialize()}}
         )
 
     def test_explain_resource(self):
         server = get_server()
-        tests = server.spaces_by_name['tests']
-        users = tests.resources_by_name['users']
+        tests = server.spaces_by_name["tests"]
+        users = tests.resources_by_name["users"]
         self.assertEqual(
-            users.query.explain(), {
-                'data': {
-                    'resource': users.serialize()
-                }
-            }
+            users.query.explain(), {"data": {"resource": users.serialize()}}
         )
 
     def test_explain_space(self):
         server = get_server()
-        tests = server.spaces_by_name['tests']
-        self.assertEqual(
-            tests.query.explain(), {
-                'data': {
-                    'space': tests.serialize()
-                }
-            }
-        )
+        tests = server.spaces_by_name["tests"]
+        self.assertEqual(tests.query.explain(), {"data": {"space": tests.serialize()}})
 
     def test_get_server(self):
         server = get_server()
@@ -517,526 +389,633 @@ class IntegrationTestCase(TestCase):
         request = Request(userA)
 
         self.assertEqual(
-            server.query.get(request=request), {
-                'data': {
-                    'tests': './tests/',
-                    '.': '././'
-                }
-            }
+            server.query.get(request=request),
+            {"data": {"tests": "./tests/", ".": "././"}},
         )
 
         response = server.query.get(request=request, response=True)
-        self.assertEqual(
-            response.data, {
-                'data': {
-                    'tests': './tests/',
-                    '.': '././'
-                }
-            }
-        )
+        self.assertEqual(response.data, {"data": {"tests": "./tests/", ".": "././"}})
         self.assertEqual(response.code, 200)
 
         get_all = (
-            server.query
-            .take.tests.users('id')
-            .take.tests.groups('id')
-            .take.tests.session('*')
+            server.query.take.tests.users("id")
+            .take.tests.groups("id")
+            .take.tests.session("*")
             .get(request=request)
         )
         self.assertEqual(
-            get_all, {
-                'data': {
-                    'tests': {
-                        'users': [{
-                            'id': str(userA.id),
-                        }, {
-                            'id': str(userB.id)
-                        }],
-                        'groups': [{
-                            'id': str(groupA.id)
-                        }, {
-                            'id': str(groupB.id)
-                        }, {
-                            'id': str(groupC.id)
-                        }],
-                        'session': {
-                            'user': str(userA.id)
-                        }
+            get_all,
+            {
+                "data": {
+                    "tests": {
+                        "users": [{"id": str(userA.id),}, {"id": str(userB.id)}],
+                        "groups": [
+                            {"id": str(groupA.id)},
+                            {"id": str(groupB.id)},
+                            {"id": str(groupC.id)},
+                        ],
+                        "session": {"user": str(userA.id)},
                     }
                 }
-            }
+            },
         )
 
         get_with_filters = (
-            server.query
-            .take.tests.users('id')
-            .take.tests.users.groups('id')
-            .where.tests.users({'=': ['id', f'"{userA.id}"']})
-            .take.tests.groups('id')
-            .where.tests.groups({'=': ['id', f'"{groupA.id}"']})
+            server.query.take.tests.users("id")
+            .take.tests.users.groups("id")
+            .where.tests.users({"=": ["id", f'"{userA.id}"']})
+            .take.tests.groups("id")
+            .where.tests.groups({"=": ["id", f'"{groupA.id}"']})
             .get(request=request)
         )
         self.assertEqual(
-            get_with_filters, {
-                'data': {
-                    'tests': {
-                        'users': [{
-                            'id': str(userA.id),
-                            'groups': [{
-                                'id': str(groupA.id)
-                            }, {
-                                'id': str(groupB.id)
-                            }]
-                        }],
-                        'groups': [{
-                            'id': str(groupA.id)
-                        }]
+            get_with_filters,
+            {
+                "data": {
+                    "tests": {
+                        "users": [
+                            {
+                                "id": str(userA.id),
+                                "groups": [
+                                    {"id": str(groupA.id)},
+                                    {"id": str(groupB.id)},
+                                ],
+                            }
+                        ],
+                        "groups": [{"id": str(groupA.id)}],
                     }
                 }
-            }
+            },
         )
 
-    def test_get_resource(self):
+    def test_get_resource_restricted(self):
         """Tests get_resource"""
         server = get_server()
-        tests = server.spaces_by_name['tests']
-        users = tests.resources_by_name['users']
-        groups = tests.resources_by_name['groups']
-        session = tests.resources_by_name['session']
-
-        self.assertEqual(users.query.get(), {'data': []})
+        tests = server.spaces_by_name["tests"]
+        users = tests.resources_by_name["users"]
+        groups = tests.resources_by_name["groups"]
+        session = tests.resources_by_name["session"]
 
         fixture = get_fixture()
         userA, userB, userC = fixture.users
+        request = Request(userB)
         groupA, groupB, groupC = fixture.groups
 
         ## selecting
-        session_get = session.query.get(
-            request=Request(userA)
+        session_get = session.query.get(request=request)
+        self.assertEqual(session_get, {"data": {"user": str(userB.id)}})
+        session_take_user = session.query.take.user("id", "first_name").get(
+            request=request
         )
-        self.assertEqual(session_get, {
-            'data': {
-                'user': str(userA.id)
-            }
-        })
-        session_take_user = session.query.take.user('id', 'first_name').get(
-            request=Request(userA)
+        self.assertEqual(
+            session_take_user,
+            {"data": {"user": {"id": str(userB.id), "first_name": userB.first_name}}},
         )
-        self.assertEqual(session_take_user, {
-            'data': {
-                'user': {
-                    'id': str(userA.id),
-                    'first_name': userA.first_name
-                }
-            }
-        })
 
-        simple_get = users.query.get()
+        simple_get = users.query.get(request=request)
         self.assertEqual(
             simple_get,
             {
-                'data': [{
-                    'id': str(userA.id),
-                    'email': userA.email,
-                    'first_name': userA.first_name,
-                    'last_name': userA.family_name,
-                    'name': f'{userA.first_name} {userA.family_name}',
-                }, {
-                    'id': str(userB.id),
-                    'email': userB.email,
-                    'first_name': userB.first_name,
-                    'last_name': userB.family_name,
-                    'name': f'{userB.first_name} {userB.family_name}'
-                }]
-            }
+                "data": [
+                    {
+                        "id": str(userB.id),
+                        "email": userB.email,
+                        "first_name": userB.first_name,
+                        "last_name": userB.family_name,
+                        "name": f"{userB.first_name} {userB.family_name}",
+                    }
+                ]
+            },
         )
 
-        take_id_only = users.query.take('id').get()
+        take_id_only = users.query.take("id").get(request=request)
         self.assertEqual(
-            take_id_only,
-            {
-                'data': [{
-                    'id': str(userA.id)
-                }, {
-                    'id': str(userB.id)
-                }]
-            }
+            take_id_only, {"data": [{"id": str(userB.id)}]}
         )
 
-        dont_take_id = users.query.take('*', '-id', '-name').get()
+        dont_take_id = users.query.take("*", "-id", "-name").get(request=request)
         self.assertEqual(
             dont_take_id,
             {
-                'data': [{
-                    'email': userA.email,
-                    'first_name': userA.first_name,
-                    'last_name': userA.family_name,
-                }, {
-                    'email': userB.email,
-                    'first_name': userB.first_name,
-                    'last_name': userB.family_name,
-                }]
-            }
+                "data": [
+                    {
+                        "email": userB.email,
+                        "first_name": userB.first_name,
+                        "last_name": userB.family_name,
+                    }
+                ]
+            },
         )
-        take_nothing = users.query.take('-id').get()
-        self.assertEqual(
-            take_nothing,
-            {
-                'data': [{}, {}]
-            }
-        )
+        take_nothing = users.query.take("-id").get(request=request)
+        self.assertEqual(take_nothing, {"data": [{}]})
 
-        take_groups = users.query.take('*', 'groups', '-name').get()
+        take_groups = users.query.take("*", "groups", "-name").get(request=request)
         self.assertEqual(
             take_groups,
             {
-                'data': [{
-                    'id': str(userA.id),
-                    'email': userA.email,
-                    'first_name': userA.first_name,
-                    'last_name': userA.family_name,
-                    'groups': [str(groupA.id), str(groupB.id)]
-                }, {
-                    'id': str(userB.id),
-                    'email': userB.email,
-                    'first_name': userB.first_name,
-                    'last_name': userB.family_name,
-                    'groups': [str(groupA.id)]
-                }]
-            }
+                "data": [
+                    {
+                        "id": str(userB.id),
+                        "email": userB.email,
+                        "first_name": userB.first_name,
+                        "last_name": userB.family_name,
+                        "groups": [str(groupA.id)]
+                    },
+                ]
+            },
         )
 
-        prefetch_groups = users.query('?take=*,-name&take.groups=*').get()
+        prefetch_groups = users.query("?take=*,-name&take.groups=*,users").get(
+            request=request
+        )
         self.assertEqual(
             prefetch_groups,
             {
-                'data': [{
-                    'id': str(userA.id),
-                    'email': userA.email,
-                    'first_name': userA.first_name,
-                    'last_name': userA.family_name,
-                    'groups': [{
-                        'id': str(groupA.id),
-                        'name': groupA.name
-                    }, {
-                        'id': str(groupB.id),
-                        'name': groupB.name
-                    }]
-                }, {
-                    'id': str(userB.id),
-                    'email': userB.email,
-                    'first_name': userB.first_name,
-                    'last_name': userB.family_name,
-                    'groups': [{
-                        'id': str(groupA.id),
-                        'name': groupA.name
-                    }]
-                }]
-            }
+                "data": [
+                    {
+                        "id": str(userB.id),
+                        "email": userB.email,
+                        "first_name": userB.first_name,
+                        "last_name": userB.family_name,
+                        "groups": [{
+                            "id": str(groupA.id),
+                            "name": groupA.name,
+                            "users": [
+                                str(userB.id)
+                            ]  # userA is not returned
+                        }],
+                    },
+                ]
+            },
         )
 
-        prefetch_deep_query = users.query('?take=*,-name&take.groups=*&take.groups.users=id')
-        prefetch_deep = prefetch_deep_query.get()
+        prefetch_deep_query = users.query(
+            "?take=*,-name&take.groups=*&take.groups.users=id"
+        )
+        prefetch_deep = prefetch_deep_query.get(request=request)
         self.assertEqual(
             prefetch_deep,
             {
-                'data': [{
-                    'id': str(userA.id),
-                    'email': userA.email,
-                    'first_name': userA.first_name,
-                    'last_name': userA.family_name,
-                    'groups': [{
-                        'id': str(groupA.id),
-                        'name': groupA.name,
-                        'users': [{'id': str(userA.id)}, {'id': str(userB.id)}],
-                    }, {
-                        'id': str(groupB.id),
-                        'name': groupB.name,
-                        'users': [{'id': str(userA.id)}]
-                    }]
-                }, {
-                    'id': str(userB.id),
-                    'email': userB.email,
-                    'first_name': userB.first_name,
-                    'last_name': userB.family_name,
-                    'groups': [{
-                        'id': str(groupA.id),
-                        'name': groupA.name,
-                        'users': [{'id': str(userA.id)}, {'id': str(userB.id)}],
-                    }]
-                }]
-            }
+                "data": [
+                    {
+                        "id": str(userB.id),
+                        "email": userB.email,
+                        "first_name": userB.first_name,
+                        "last_name": userB.family_name,
+                        "groups": [
+                            {
+                                "id": str(groupA.id),
+                                "name": groupA.name,
+                                "users": [{"id": str(userB.id)}],
+                                # userA is not returned to userB
+                            }
+                        ],
+                    },
+                ]
+            },
         )
 
         ## filtering
 
         get_where = (
-            users.query
-            .take('id')
-            .where({
-                'contains': ['first_name', f'"{userA.first_name}"']
-            })
-            .get()
+            users.query.take("id")
+            .where({"contains": ["first_name", f'"{userB.first_name}"']})
+            .get(request=request)
         )
-        self.assertEqual(
-            get_where,
-            {
-                'data': [{
-                    'id': str(userA.id)
-                }]
-            }
-        )
+        self.assertEqual(get_where, {"data": [{"id": str(userB.id)}]})
 
         get_where_related = (
-            users.query
-            .take('id')
-            .where({
-                'null': 'groups'
-            })
-            .get()
+            users.query.take("id").where({"null": "groups"}).get(request=request)
+        )
+        self.assertEqual(get_where_related, {"data": []})
+
+
+    def test_get_resource(self):
+        """Tests get_resource"""
+        server = get_server()
+        tests = server.spaces_by_name["tests"]
+        users = tests.resources_by_name["users"]
+        groups = tests.resources_by_name["groups"]
+        session = tests.resources_by_name["session"]
+
+        fixture = get_fixture()
+        userA, userB, userC = fixture.users
+        request = Request(userA)
+        groupA, groupB, groupC = fixture.groups
+
+        # unauthorized user can't see any users
+        self.assertEqual(users.query.get(), {'data': []})
+
+        ## selecting
+        session_get = session.query.get(request=request)
+        self.assertEqual(session_get, {"data": {"user": str(userA.id)}})
+        session_take_user = session.query.take.user("id", "first_name").get(
+            request=request
         )
         self.assertEqual(
-            get_where_related,
-            {
-                'data': []
-            }
+            session_take_user,
+            {"data": {"user": {"id": str(userA.id), "first_name": userA.first_name}}},
         )
+
+        simple_get = users.query.get(request=request)
+        self.assertEqual(
+            simple_get,
+            {
+                "data": [
+                    {
+                        "id": str(userA.id),
+                        "email": userA.email,
+                        "is_superuser": True,
+                        "first_name": userA.first_name,
+                        "last_name": userA.family_name,
+                        "name": f"{userA.first_name} {userA.family_name}",
+                    },
+                    {
+                        "id": str(userB.id),
+                        "is_superuser": False,
+                        "email": userB.email,
+                        "first_name": userB.first_name,
+                        "last_name": userB.family_name,
+                        "name": f"{userB.first_name} {userB.family_name}",
+                    },
+                ]
+            },
+        )
+
+        take_id_only = users.query.take("id").get(request=request)
+        self.assertEqual(
+            take_id_only, {"data": [{"id": str(userA.id)}, {"id": str(userB.id)}]}
+        )
+
+        dont_take_id = users.query.take("*", "-id", "-name").get(request=request)
+        self.assertEqual(
+            dont_take_id,
+            {
+                "data": [
+                    {
+                        "email": userA.email,
+                        "first_name": userA.first_name,
+                        "is_superuser": True,
+                        "last_name": userA.family_name,
+                    },
+                    {
+                        "email": userB.email,
+                        "is_superuser": False,
+                        "first_name": userB.first_name,
+                        "last_name": userB.family_name,
+                    },
+                ]
+            },
+        )
+        take_nothing = users.query.take("-id").get(request=request)
+        self.assertEqual(take_nothing, {"data": [{}, {}]})
+
+        take_groups = users.query.take("*", "groups", "-name").get(request=request)
+        self.assertEqual(
+            take_groups,
+            {
+                "data": [
+                    {
+                        "id": str(userA.id),
+                        "email": userA.email,
+                        "is_superuser": True,
+                        "first_name": userA.first_name,
+                        "last_name": userA.family_name,
+                        "groups": [str(groupA.id), str(groupB.id)],
+                    },
+                    {
+                        "id": str(userB.id),
+                        "email": userB.email,
+                        "is_superuser": False,
+                        "first_name": userB.first_name,
+                        "last_name": userB.family_name,
+                        "groups": [str(groupA.id)],
+                    },
+                ]
+            },
+        )
+
+        prefetch_groups = users.query("?take=*,-name&take.groups=*").get(
+            request=request
+        )
+        self.assertEqual(
+            prefetch_groups,
+            {
+                "data": [
+                    {
+                        "id": str(userA.id),
+                        "email": userA.email,
+                        "is_superuser": True,
+                        "first_name": userA.first_name,
+                        "last_name": userA.family_name,
+                        "groups": [
+                            {
+                                "id": str(groupA.id),
+                                "name": groupA.name,
+                            },
+                            {
+                                "id": str(groupB.id),
+                                "name": groupB.name,
+                            },
+                        ],
+                    },
+                    {
+                        "id": str(userB.id),
+                        "email": userB.email,
+                        "is_superuser": False,
+                        "first_name": userB.first_name,
+                        "last_name": userB.family_name,
+                        "groups": [{
+                            "id": str(groupA.id),
+                            "name": groupA.name,
+                        }],
+                    },
+                ]
+            },
+        )
+
+        prefetch_deep_query = users.query(
+            "?take=*,-name&take.groups=*&take.groups.users=id"
+        )
+        prefetch_deep = prefetch_deep_query.get(request=request)
+        self.assertEqual(
+            prefetch_deep,
+            {
+                "data": [
+                    {
+                        "id": str(userA.id),
+                        "email": userA.email,
+                        "is_superuser": userA.is_superuser,
+                        "first_name": userA.first_name,
+                        "last_name": userA.family_name,
+                        "groups": [
+                            {
+                                "id": str(groupA.id),
+                                "name": groupA.name,
+                                "users": [{"id": str(userA.id)}, {"id": str(userB.id)}],
+                            },
+                            {
+                                "id": str(groupB.id),
+                                "name": groupB.name,
+                                "users": [{"id": str(userA.id)}],
+                            },
+                        ],
+                    },
+                    {
+                        "id": str(userB.id),
+                        "email": userB.email,
+                        "is_superuser": userB.is_superuser,
+                        "first_name": userB.first_name,
+                        "last_name": userB.family_name,
+                        "groups": [
+                            {
+                                "id": str(groupA.id),
+                                "name": groupA.name,
+                                "users": [{"id": str(userA.id)}, {"id": str(userB.id)}],
+                            }
+                        ],
+                    },
+                ]
+            },
+        )
+
+        ## filtering
+
+        get_where = (
+            users.query.take("id")
+            .where({"contains": ["first_name", f'"{userA.first_name}"']})
+            .get(request=request)
+        )
+        self.assertEqual(get_where, {"data": [{"id": str(userA.id)}]})
+
+        get_where_related = (
+            users.query.take("id").where({"null": "groups"}).get(request=request)
+        )
+        self.assertEqual(get_where_related, {"data": []})
 
         ## sorting
 
-        sort_descending = users.query.take('id').sort('-last_name').get()
+        sort_descending = users.query.take("id").sort("-last_name").get(request=request)
         self.assertEqual(
-            sort_descending,
-            {
-                'data': [{
-                    'id': str(userB.id)
-                }, {
-                    'id': str(userA.id)
-                }]
-            }
+            sort_descending, {"data": [{"id": str(userB.id)}, {"id": str(userA.id)}]}
         )
 
-        sort_ascending = users.query.take('id').sort('last_name').get()
+        sort_ascending = users.query.take("id").sort("last_name").get(request=request)
         self.assertEqual(
-            sort_descending,
-            {
-                'data': [{
-                    'id': str(userB.id)
-                }, {
-                    'id': str(userA.id)
-                }]
-            }
+            sort_descending, {"data": [{"id": str(userB.id)}, {"id": str(userA.id)}]}
         )
 
         ## paginating
 
-        page_1 = users.query.take('id').page(size=1).get()
-        after = base64.b64encode(json.dumps({'offset': 1}).encode('utf-8'))
+        page_1 = users.query.take("id").page(size=1).get(request=request)
+        after = base64.b64encode(json.dumps({"offset": 1}).encode("utf-8"))
         self.assertEqual(
             page_1,
             {
-                'data': [{
-                    'id': str(userA.id)
-                }],
-                'meta': {
-                    'page': {
-                        'data': {
-                            'after': after,
-                            'total': 2
-                        }
-                    }
-                }
-            }
+                "data": [{"id": str(userA.id)}],
+                "meta": {"page": {"data": {"after": after, "total": 2}}},
+            },
         )
-        page_2 = users.query.take('id').page(size=1, after=after).get()
-        self.assertEqual(
-            page_2,
-            {
-                'data': [{
-                    'id': str(userB.id)
-                }]
-            }
-        )
+        page_2 = users.query.take("id").page(size=1, after=after).get(request=request)
+        self.assertEqual(page_2, {"data": [{"id": str(userB.id)}]})
 
-    def test_get_record(self):
-        """Tests get_record"""
+    def test_get_record_restricted(self):
+        """Tests get_record as a non-superuser"""
         server = get_server()
-        tests = server.spaces_by_name['tests']
-        users = tests.resources_by_name['users']
-        groups = tests.resources_by_name['groups']
+        tests = server.spaces_by_name["tests"]
+        users = tests.resources_by_name["users"]
+        groups = tests.resources_by_name["groups"]
 
         fixture = get_fixture()
         userA, userB, userC = fixture.users
         groupA, groupB, groupC = fixture.groups
+        request = Request(userB)
 
         ## selecting
-        simple_get = users.query.get(userA.id)
+        not_found = users.query.get(userA.id, request=request, response=True)
+        # 404 is returned instead of 403 to prevent leaking information about this ID
+        self.assertEqual(
+            not_found.code,
+            404
+        )
+
+        simple_get = users.query.get(userB.id, request=request)
         self.assertEqual(
             simple_get,
             {
-                'data': {
-                    'id': str(userA.id),
-                    'email': userA.email,
-                    'first_name': userA.first_name,
-                    'last_name': userA.family_name,
-                    'name': f'{userA.first_name} {userA.family_name}'
+                "data": {
+                    "id": str(userB.id),
+                    "email": userB.email,
+                    "first_name": userB.first_name,
+                    "last_name": userB.family_name,
+                    "name": f"{userB.first_name} {userB.family_name}",
                 }
-            }
+            },
         )
 
-        take_id_only = users.query.take('id').get(userA.id)
+    def test_get_record(self):
+        """Tests get_record as a superuser"""
+        server = get_server()
+        tests = server.spaces_by_name["tests"]
+        users = tests.resources_by_name["users"]
+        groups = tests.resources_by_name["groups"]
+
+        fixture = get_fixture()
+        userA, userB, userC = fixture.users
+        groupA, groupB, groupC = fixture.groups
+        request = Request(userA)
+
+        ## selecting
+        simple_get = users.query.get(userA.id, request=request)
         self.assertEqual(
-            take_id_only,
+            simple_get,
             {
-                'data': {
-                    'id': str(userA.id)
+                "data": {
+                    "id": str(userA.id),
+                    "email": userA.email,
+                    "is_superuser": userA.is_superuser,
+                    "first_name": userA.first_name,
+                    "last_name": userA.family_name,
+                    "name": f"{userA.first_name} {userA.family_name}",
                 }
-            }
+            },
         )
 
-        dont_take_id = users.query.take('*', '-id').get(userA.id)
+        take_id_only = users.query.take("id").get(userA.id, request=request)
+        self.assertEqual(take_id_only, {"data": {"id": str(userA.id)}})
+
+        dont_take_id = users.query.take("*", "-id").get(userA.id, request=request)
         self.assertEqual(
             dont_take_id,
             {
-                'data': {
-                    'email': userA.email,
-                    'first_name': userA.first_name,
-                    'last_name': userA.family_name,
-                    'name': f'{userA.first_name} {userA.family_name}'
+                "data": {
+                    "email": userA.email,
+                    "is_superuser": userA.is_superuser,
+                    "first_name": userA.first_name,
+                    "last_name": userA.family_name,
+                    "name": f"{userA.first_name} {userA.family_name}",
                 }
-            }
+            },
         )
 
-        take_nothing = users.query.take('-id').get(userA.id)
-        self.assertEqual(
-            take_nothing,
-            {
-                'data': {}
-            }
-        )
+        take_nothing = users.query.take("-id").get(userA.id, request=request)
+        self.assertEqual(take_nothing, {"data": {}})
 
-        take_groups = users.query.take('*', 'groups').get(userA.id)
+        take_groups = users.query.take("*", "groups").get(userA.id, request=request)
         self.assertEqual(
             take_groups,
             {
-                'data': {
-                    'id': str(userA.id),
-                    'email': userA.email,
-                    'first_name': userA.first_name,
-                    'last_name': userA.family_name,
-                    'name': f'{userA.first_name} {userA.family_name}',
-                    'groups': [str(groupA.id), str(groupB.id)]
+                "data": {
+                    "id": str(userA.id),
+                    "email": userA.email,
+                    "is_superuser": userA.is_superuser,
+                    "first_name": userA.first_name,
+                    "last_name": userA.family_name,
+                    "name": f"{userA.first_name} {userA.family_name}",
+                    "groups": [str(groupA.id), str(groupB.id)],
                 }
-            }
+            },
         )
 
-        prefetch_groups = users.query('?take=*&take.groups=*').get(userA.id)
+        prefetch_groups = users.query("?take=*&take.groups=*").get(
+            userA.id, request=request
+        )
         self.assertEqual(
             prefetch_groups,
             {
-                'data': {
-                    'id': str(userA.id),
-                    'email': userA.email,
-                    'first_name': userA.first_name,
-                    'last_name': userA.family_name,
-                    'name': f'{userA.first_name} {userA.family_name}',
-                    'groups': [{
-                        'id': str(groupA.id),
-                        'name': groupA.name
-                    }, {
-                        'id': str(groupB.id),
-                        'name': groupB.name
-                    }]
+                "data": {
+                    "id": str(userA.id),
+                    "email": userA.email,
+                    "first_name": userA.first_name,
+                    "is_superuser": userA.is_superuser,
+                    "last_name": userA.family_name,
+                    "name": f"{userA.first_name} {userA.family_name}",
+                    "groups": [
+                        {"id": str(groupA.id), "name": groupA.name},
+                        {"id": str(groupB.id), "name": groupB.name},
+                    ],
                 }
-            }
+            },
         )
 
-        prefetch_deep_query = users.query('?take=*&take.groups=*&take.groups.users=id')
-        prefetch_deep = prefetch_deep_query.get(userA.id)
+        prefetch_deep_query = users.query("?take=*&take.groups=*&take.groups.users=id")
+        prefetch_deep = prefetch_deep_query.get(userA.id, request=request)
         self.assertEqual(
             prefetch_deep,
             {
-                'data': {
-                    'id': str(userA.id),
-                    'email': userA.email,
-                    'first_name': userA.first_name,
-                    'last_name': userA.family_name,
-                    'name': f'{userA.first_name} {userA.family_name}',
-                    'groups': [{
-                        'id': str(groupA.id),
-                        'name': groupA.name,
-                        'users': [{'id': str(userA.id)}, {'id': str(userB.id)}],
-                    }, {
-                        'id': str(groupB.id),
-                        'name': groupB.name,
-                        'users': [{'id': str(userA.id)}]
-                    }]
+                "data": {
+                    "id": str(userA.id),
+                    "is_superuser": userA.is_superuser,
+                    "email": userA.email,
+                    "first_name": userA.first_name,
+                    "last_name": userA.family_name,
+                    "name": f"{userA.first_name} {userA.family_name}",
+                    "groups": [
+                        {
+                            "id": str(groupA.id),
+                            "name": groupA.name,
+                            "users": [{"id": str(userA.id)}, {"id": str(userB.id)}],
+                        },
+                        {
+                            "id": str(groupB.id),
+                            "name": groupB.name,
+                            "users": [{"id": str(userA.id)}],
+                        },
+                    ],
                 }
-            }
+            },
         )
 
     def test_get_field(self):
         """Tests get_field"""
         server = get_server()
-        tests = server.spaces_by_name['tests']
-        users = tests.resources_by_name['users']
-        groups = tests.resources_by_name['groups']
+        tests = server.spaces_by_name["tests"]
+        users = tests.resources_by_name["users"]
+        groups = tests.resources_by_name["groups"]
 
         fixture = get_fixture()
         userA, userB, userC = fixture.users
+        request = Request(userA)
         groupA, groupB, groupC = fixture.groups
 
         ## selecting
-        simple_get = users.query.get(userA.id, 'first_name')
-        self.assertEqual(
-            simple_get,
-            {
-                'data': userA.first_name
-            }
-        )
+        simple_get = users.query.get(userA.id, "first_name", request=request)
+        self.assertEqual(simple_get, {"data": userA.first_name})
 
-        take_groups = users.query.get(userA.id, 'groups')
-        self.assertEqual(
-            take_groups,
-            {
-                'data': [str(groupA.id), str(groupB.id)]
-            }
-        )
+        take_groups = users.query.get(userA.id, "groups", request=request)
+        self.assertEqual(take_groups, {"data": [str(groupA.id), str(groupB.id)]})
 
-        prefetch_groups = users.query('?take=id,name').get(userA.id, 'groups')
+        prefetch_groups = users.query("?take=id,name").get(userA.id, "groups", request=request)
         self.assertEqual(
             prefetch_groups,
             {
-                'data': [{
-                    'id': str(groupA.id),
-                    'name': groupA.name
-                }, {
-                    'id': str(groupB.id),
-                    'name': groupB.name
-                }]
-            }
+                "data": [
+                    {"id": str(groupA.id), "name": groupA.name},
+                    {"id": str(groupB.id), "name": groupB.name},
+                ]
+            },
         )
 
-        prefetch_deep = users.query(
-            '?take=id,name,users&take.users=id'
-        ).get(userA.id, 'groups')
+        prefetch_deep = users.query("?take=id,name,users&take.users=id").get(
+            userA.id, "groups", request=request
+        )
         self.assertEqual(
             prefetch_deep,
             {
-                'data': [{
-                    'id': str(groupA.id),
-                    'name': groupA.name,
-                    'users': [{
-                        'id': str(userA.id),
-                    }, {
-                        'id': str(userB.id)
-                    }]
-                }, {
-                    'id': str(groupB.id),
-                    'name': groupB.name,
-                    'users': [{
-                        'id': str(userA.id)
-                    }]
-                }]
-            }
+                "data": [
+                    {
+                        "id": str(groupA.id),
+                        "name": groupA.name,
+                        "users": [{"id": str(userA.id),}, {"id": str(userB.id)}],
+                    },
+                    {
+                        "id": str(groupB.id),
+                        "name": groupB.name,
+                        "users": [{"id": str(userA.id)}],
+                    },
+                ]
+            },
         )
+
+        num_groups_value = users.query(f'{userA.id}/num_groups').get(request=request)
+        self.assertEqual(num_groups_value, {'data': userA.groups.count()})

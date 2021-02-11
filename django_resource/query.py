@@ -287,33 +287,73 @@ class Query(WhereQueryMixin):
         return update
 
     @classmethod
-    def from_querystring(cls, value, **kwargs):
+    def from_querystring(cls, querystring, **kwargs):
         result = cls(**kwargs)
-        resource = None
-        if '?' in value:
-            parts = value.split('?')
-            if len(parts) == 2:
-                resource, value = value.split('?')
-                resource = [r for r in resource.split('/') if r]
-                update = {}
-                if len(resource) == 1:
-                    resource = resource[0]
-                    update['resource'] = resource
-                if len(resource) == 2:
-                    resource, record = resource
-                    update['resource'] = resource
-                    update['record'] = record
-                if len(resource) == 3:
-                    resource, record, field = resource
-                    update['resource'] = resource
-                    update['record'] = record
-                    update['field'] = field
-                if update:
-                    result._update(update, copy=False)
-            else:
-                raise ValueError(f'Invalid querystring: {value}')
+        state = kwargs.get('state')
 
-        query = parse_qs(value)
+        type = 'server'
+        if 'resource' in state:
+            type = 'resource'
+        elif 'space' in state:
+            type = 'space'
+
+        remainder = None
+        space = resource = field = record = None
+        parts = querystring.split('?')
+        if len(parts) <= 2:
+            resource_parts = parts[0]
+            remainder = parts[1] if len(parts) == 2 else None
+            resource_parts = [r for r in resource_parts.split('/') if r]
+            update = {}
+            len_resource = len(resource_parts)
+            if len_resource == 1:
+                if type == 'server':
+                    space = resource_parts[0]
+                elif type == 'space':
+                    resource = resource_parts[0]
+                else:
+                    field = resource_parts[0]
+            elif len_resource == 2:
+                # either resource/record or space/resource or record/field
+                if type == 'server':
+                    space, resource = resource_parts
+                elif type == 'space':
+                    resource, record = resource_parts
+                else:
+                    record, field = resource_parts
+            elif len_resource == 3:
+                if type == 'space':
+                    resource, record, field = resource_parts
+                elif type == 'server':
+                    space, resource, record = resource_parts
+                else:
+                    raise ValueError(f'Invalid querystring: {querystring}')
+            elif len_resource == 4:
+                if type == 'server':
+                    space, resource, record, field = resource_parts
+                else:
+                    raise ValueError(f'Invalid querystring: {querystring}')
+            elif len_resource > 5:
+                raise ValueError(f'Invalid querystring: {querystring}')
+
+            if space is not None:
+                update['space'] = space
+            if resource is not None:
+                update['resource'] = resource
+            if record is not None:
+                update['record'] = record
+            if field is not None:
+                update['field'] = field
+            if update:
+                result._update(update, copy=False)
+        else:
+            raise ValueError(f'Invalid querystring: {querystring}')
+
+        if remainder:
+            query = parse_qs(remainder)
+        else:
+            query = {}
+
         where = defaultdict(list)  # level -> [args]
         for key, value in query.items():
             feature = get_feature(key)

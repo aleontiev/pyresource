@@ -1,4 +1,6 @@
-from .exceptions import SchemaResolverError
+from .exceptions import SchemaResolverError, RequestResolverError
+from .utils import is_literal, get, unliteral
+from .expression import execute, methods
 
 
 class SchemaResolver:
@@ -63,26 +65,41 @@ class RequestResolver:
         - If expression arguments end up entirely as constants
         and the expression can be interpretted in Python,
         the expression will be reduced into constants.
-        TODO(this)
         """
         if isinstance(data, dict):
-            return {
+            result = {
                 cls.resolve(key, **context): cls.resolve(value, **context)
                 for key, value in data.items()
             }
+            if len(result) == 1:
+                # possible expression that we can evaluate
+                key = next(iter(result))
+                value = result[key]
+                # resolve child arguments recursively
+                if key in methods and is_literal(value):
+                    value = unliteral(value)
+                    try:
+                        result, _ = execute({key: value}, context)
+                    except Exception as e:
+                        raise RequestResolverError(
+                            f'Failed to resolve {data} executing {key}({value})'
+                            f'{e.__class__.__name__}: {e}'
+                        )
+                    return result
+            return result
         elif isinstance(data, list):
             return [cls.resolve(dat, **context) for dat in data]
         elif isinstance(data, str) and data.startswith('.'):
             data = data[1:]
             # by default, treat as a literal if this is a string
-            literal = True
+            as_literal = True
             if data.endswith('.'):
                 # if ends with ".", do not treat as a literal
-                literal = False
+                as_literal = False
                 data = data[:-1]
 
             data = get(data, context)
-            if literal:
+            if as_literal and isinstance(data, str):
                 data = f'"{data}"'
             return data
         else:

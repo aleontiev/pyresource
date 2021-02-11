@@ -1,13 +1,13 @@
 import re
-from .utils import resolve, get
+from .utils import resolve, get, is_literal, unliteral
 
 
 def get_expression(expression, context):
     if not expression:
         return expression
 
-    if expression[0] == expression[-1] and expression[0] in {'"', "'"}:
-        return expression[1:-1]
+    if is_literal(expression):
+        return unliteral(expression)
 
     if expression.startswith('.'):
         # .request.user -> request.user
@@ -46,11 +46,24 @@ def join_expression(expression, context):
     return separator.join([v for v in values if v])
 
 
+def true_expression(expression, context):
+    if isinstance(expression, str):
+        expression = get_expression(expression, context)
+
+    return bool(expression)
+
+
+def false_expression(expression, context):
+    return not true_expression(expression, context)
+
+
 def value_expression(expression, context):
     return expression
 
 
 methods = {
+    "true": true_expression,
+    "false": false_expression,
     "get": get_expression,
     "join": join_expression,
     "concat": join_expression

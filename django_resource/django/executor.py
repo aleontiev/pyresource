@@ -114,7 +114,7 @@ class DjangoQueryLogic:
     ):
         """Add .filter"""
         source = cls._get_queryset_source(resource, related=related)
-        request_filters = default_filters = None
+        can_filters = request_filters = default_filters = None
         if isinstance(source, dict):
             qs = source.get("queryset")
             where = qs.get("where", None)
@@ -130,11 +130,15 @@ class DjangoQueryLogic:
                 resource, where, query=query, request=request, translate=True
             )
 
-        if default_filters:
-            queryset = queryset.filter(default_filters)
+        can = context.get('can')
+        if isinstance(can, dict):
+            can_filters = cls._get_filters(
+                resource, can, query=query, request=request, translate=True
+            )
 
-        if request_filters:
-            queryset = queryset.filter(request_filters)
+        for filters in (can_filters, default_filters, request_filters):
+            if filters:
+                queryset = queryset.filter(filters)
 
         if record_id:
             queryset = queryset.filter(pk=record_id)
@@ -171,16 +175,26 @@ class DjangoQueryLogic:
             for field in fields:
                 take_field = take.get(field.name)
                 if take_root or (take_field and isinstance(take_field, dict)):
+                    # recursively build nested querysets
                     source = SchemaResolver.get_field_source(field.source)
                     source = resource_to_django(source)
                     related = field.related
                     related_level = f"{level}.{field.name}" if level else field.name
+                    # selection: which fields should be selected
                     related_fields = cls._take_fields(
                         related,
                         action="get",
                         query=query,
                         request=request,
                         level=related_level,
+                    )
+                    # authorization: is the request allowed to prefetch this relation
+                    related_can = cls._can(
+                        related,
+                        'get.prefetch',
+                        query=query,
+                        request=request,
+                        field=field
                     )
                     next_queryset = cls._get_queryset(
                         resolver,
@@ -189,7 +203,7 @@ class DjangoQueryLogic:
                         query,
                         request=request,
                         level=related_level,
-                        **context,
+                        can=related_can
                     )
                     prefetches.append(
                         Prefetch(
@@ -326,7 +340,6 @@ class DjangoQueryLogic:
             queryset = getattr(cls, f"_add_queryset_{add}")(
                 resource, fields, queryset, query, resolver=resolver, **context,
             )
-        # print(str(queryset.query))
         return queryset
 
     @classmethod
@@ -403,7 +416,8 @@ class DjangoExecutor(Executor, DjangoQueryLogic):
         if resource is None:
             resource = self.store.resource
 
-        if not self._can(resource, f"get.{endpoint}", query, request):
+        can = self._can(resource, f"get.{endpoint}", query, request)
+        if not can:
             raise Forbidden()
 
         source = resource.source
@@ -434,7 +448,7 @@ class DjangoExecutor(Executor, DjangoQueryLogic):
             if resource.singleton:
                 # get queryset and obtain first record
                 record = self._get_queryset(
-                    resolver, resource, fields, query, request=request, **context
+                    resolver, resource, fields, query, request=request, can=can, **context
                 ).first()
                 if not record:
                     raise ResourceMisconfigured(
@@ -459,6 +473,7 @@ class DjangoExecutor(Executor, DjangoQueryLogic):
                     query,
                     count=count,
                     request=request,
+                    can=can,
                     **context,
                 )
                 if endpoint == "resource":

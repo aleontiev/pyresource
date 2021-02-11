@@ -18,9 +18,15 @@ class ExpressionValidationError(QueryValidationError):
     pass
 
 
+class RequestResolverError(Exception):
+    """Exception resolving schema data from the ORM"""
+    pass
+
+
 class SchemaResolverError(Exception):
     """Exception resolving schema data from the ORM"""
     pass
+
 
 class ResourceMisconfigured(QueryExecutionError):
     """Exception caused by resource misconfiguration"""

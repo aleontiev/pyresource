@@ -2,11 +2,12 @@ import base64
 import json
 import copy
 
-from .exceptions import SerializationError, MethodNotAllowed, RequestError
+from .exceptions import SerializationError, MethodNotAllowed, RequestError, ResourceMisconfigured
 from .conf import settings
-from .resolver import SchemaResolver
+from .resolver import SchemaResolver, RequestResolver
 from .response import Response
 from .utils import get
+from .expression import execute
 from .features import LEVELED_FEATURES, ROOT_FEATURES
 from .type_utils import get_link
 
@@ -111,7 +112,7 @@ class Selection:
 
 class Authorization:
     @classmethod
-    def _can(cls, resource, action, query=None, request=None):
+    def _can(cls, resource, action, query=None, request=None, field=None):
         """Whether or not the given action is authorized
 
         Arguments:
@@ -125,7 +126,84 @@ class Authorization:
             dict: the action may be authorized for some records
                 e.g: {'true': 'is_active'}
         """
-        return True  # TODO
+        if field:
+            if field.can and isinstance(field.can, dict) and field.can.get('prefetch'):
+                # permission to prefetch granted by this field
+                prefetch = field.can['prefetch']
+                if prefetch is True:
+                    return True
+                else:
+                    prefetch = RequestResolver.resolve(
+                        prefetch,
+                        request=request,
+                        query=query
+                    )
+                    if prefetch is True:
+                        return True
+                    elif prefetch:
+                        # TODO: support functional type and apply it during serialization
+                        raise ResourceMisconfigured(
+                            f'{field.id}.prefetch: '
+                            f'must resolve to simple type, not {prefetch}'
+                        )
+
+        can = resource.can
+        if can is None:
+            # resource has no permissions defined
+            # -> assume this can be done
+            return True
+
+        clauses = []
+        action = action.lower()
+        action_name, endpoint_name = action.split('.')
+        # look for matching clauses
+        for key, value in can.items():
+            # key can be:
+            # *: match every action/endpoint combination possible
+            # get: match every endpoint for action = get
+            # *.field: match every action for endpoint = field
+            # get.field: match field endpoint for action = get
+            # get, set: match every endpoint for action = get and also action = set
+            parts = key.split(',')
+            for part in parts:
+                part = part.strip().lower()
+                if '.' in part:
+                    # must have only one .
+                    action_part, endpoint_part = part.split('.')
+                    # a.b or *.a or a.*
+                    if part == action or (
+                        action_part == '*' and endport_part == endpoint_name
+                    ) or (
+                        endpoint_part == '*' and action_part == action_name
+                    ):
+                        clauses.append((key, value))
+                        break
+                else:
+                    if part == '*' or part == action_name:
+                        clauses.append((key, value))
+                        break
+
+        result = []
+        for key, clause in clauses:
+            try:
+                clause = RequestResolver.resolve(clause, query=query, request=request)
+            except Exception as e:
+                raise ResourceMisconfigured(
+                    f'{resource.id}: failed to resolve can (key = {key}, clause = {clause})\n'
+                    f'{e.__class__.__name__}: {e}'
+                )
+            if clause:
+                if clause is True:
+                    return True
+                result.append(clause)
+
+        if result:
+            # return an object which means allowed to access certain records
+            # depending on the filter
+            result = {'or': result} if len(result) > 1 else result[0]
+            return result
+        else:
+            return False
 
     @classmethod
     def _can_take_field(cls, field, action, query=None, request=None):
@@ -134,7 +212,8 @@ class Authorization:
             if action in can:
                 can = can[action]
                 if isinstance(can, dict):
-                    can = execute(can, {"request": request, "query": query.state})
+                    can_dict = can
+                    can, _ = execute(can, {"request": request, "query": query.state})
                 return can
             return False
         else:
@@ -145,7 +224,7 @@ class Serialization:
     @classmethod
     def _to_json_value(self, value):
         """Get a JSON-compatible representation of the given value"""
-        if isinstance(value, list):
+        if isinstance(value, (list, tuple)):
             return [self._to_json_value(v) for v in value]
 
         if isinstance(value, dict):
