@@ -1,5 +1,6 @@
 from .resource import Resource
 from decimal import Decimal
+from .schemas import TypeSchema
 from .type_utils import (
     is_container,
     is_link,
@@ -13,24 +14,8 @@ from .type_utils import (
 )
 
 class Type(Resource):
-    class Schema:
-        id = "types"
-        name = "types"
-        space = "."
-        fields = {
-            "name": {"type": "string", "primary": True},
-            "base": {"type": "@types", "inverse": "children"},
-            "children": {
-                "type": {
-                    "type": "array",
-                    "items": "@types"
-                },
-                "inverse": "base",
-                "default": [],
-            },
-            "container": {"type": "boolean", "default": False},
-            "server": {"type": "@server", "inverse": "types"},
-        }
+    class Schema(TypeSchema):
+        pass
 
     @classmethod
     def get_base_type(cls, name, server=None):

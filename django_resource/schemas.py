@@ -32,6 +32,7 @@ class ResourceSchema:
     space = "."
     parameters = None
     features = None
+    engine = "resource"
     fields = {
         "id": {
             "primary": True,
@@ -58,11 +59,15 @@ class ResourceSchema:
         "singleton": {
             "type": "boolean",
             "default": False,
-            "description": ("Whether or not the resource represents one record"),
+            "description": "Whether or not the resource represents one record",
         },
         "description": {
             "type": ["null", "string"],
             "description": "Explanation of the resource",
+        },
+        "engine": {
+            "type": "string",
+            "default": "django"
         },
         "space": {
             "type": "@spaces",
@@ -124,6 +129,7 @@ class ResourceSchema:
 class SpaceSchema:
     id = "spaces"
     name = "spaces"
+    engine = "resource"
     description = "spaces description"
     space = "."
     fields = {
@@ -134,6 +140,10 @@ class SpaceSchema:
             "can": {"get": True, "set": False},
         },
         "name": {"type": "string", "primary": True},
+        "engine": {
+            "type": "string",
+            "default": "django"
+        },
         "can": can,
         "resources": {
             "type": {"type": "array", "items": "@resources"},
@@ -149,6 +159,7 @@ class ServerSchema:
     name = "server"
     singleton = True
     space = "."
+    engine = "resource"
     description = "server description"
     fields = {
         "version": {"type": "string", "default": version},
@@ -159,6 +170,10 @@ class ServerSchema:
             "default": [],
         },
         "can": can,
+        "engine": {
+            "type": "string",
+            "default": "django"
+        },
         "features": {
             "type": {
                 "anyOf": [
@@ -215,4 +230,24 @@ class FieldSchema:
         "index": {"type": ["boolean", "string"], "default": False},
         "primary": {"type": "boolean", "default": False},
         "default": {"type": "any"},
+    }
+
+
+class TypeSchema:
+    id = "types"
+    name = "types"
+    space = "."
+    fields = {
+        "name": {"type": "string", "primary": True},
+        "base": {"type": "@types", "inverse": "children"},
+        "children": {
+            "type": {
+                "type": "array",
+                "items": "@types"
+            },
+            "inverse": "base",
+            "default": [],
+        },
+        "container": {"type": "boolean", "default": False},
+        "server": {"type": "@server", "inverse": "types"},
     }

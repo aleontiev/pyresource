@@ -38,7 +38,7 @@ class Field(Resource):
 
             if source:
                 # get value from source expression
-                value = self.get_from_source(source)
+                value = self.get_from_expression(source)
             else:
                 # get value from parent by name
                 default = self.get_option('default')
@@ -56,7 +56,7 @@ class Field(Resource):
 
             self.set_value(value)
 
-    def get_from_source(self, source):
+    def get_from_expression(self, source):
         return execute(source, {'fields': self.parent})[0]
 
     @cached_property

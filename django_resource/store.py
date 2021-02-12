@@ -2,6 +2,18 @@ from .utils import cached_property, get
 from .query import Query
 
 
+def get_store_class(engine):
+    if engine == 'django':
+        from .django.store import DjangoStore
+        return DjangoStore
+    elif engine == 'api':
+        raise NotImplementedError()
+    elif engine == 'resource':
+        raise NotImplementedError()
+    else:
+        raise NotImplementedError()
+
+
 class Store:
     def __init__(self, resource):
         self.server = self.resource = self.space = None

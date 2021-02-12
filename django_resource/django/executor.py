@@ -262,6 +262,9 @@ class DjangoQueryLogic:
             source = resource_to_django(source)
             if is_list:
                 kwargs = {}
+                # TODO: refactor this to use the normal get_queryset logic
+                # ArrayAgg does not work properly in prefetch querysets
+
                 # optional ordering
                 if isinstance(field.source, dict):
                     qs = field.source.get("queryset")
@@ -270,8 +273,6 @@ class DjangoQueryLogic:
                         sort = f"{source}.{sort}"
                         kwargs["ordering"] = resource_to_django(sort)
 
-                # TODO: support backends besides Postgres
-                # should be doable with custom aggregates
                 return ArrayAgg(source, **kwargs)
             else:
                 return F(source)

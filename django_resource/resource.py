@@ -1,6 +1,7 @@
 from .expression import execute
 from .utils import as_dict, cached_property
 from .exceptions import SchemaResolverError, ResourceMisconfigured, FieldMisconfigured
+from .store import get_store_class
 from .schemas import ResourceSchema
 
 
@@ -33,9 +34,11 @@ class Resource(object):
         self._fields = {}
 
         if self.get_meta('id') == 'resources':
-            # resources trigger a binding with their space
-            # on initialization
-            assert self.space is not None
+            space = self.get_option('space')
+            if space.name != '.':
+                # normal resources trigger a binding with their space
+                # on initialization, do this by calling self.space
+                assert self.space is not None
 
     def __getattr__(self, key):
         if key.startswith("_"):
@@ -100,6 +103,10 @@ class Resource(object):
                 default, _ = execute(default, {'fields': self})
             return default
 
+    @property
+    def pk(self):
+        return self.get_id()
+
     @cached_property
     def fields_by_name(self):
         result = {}
@@ -108,13 +115,16 @@ class Resource(object):
         return result
 
     @cached_property
-    def data(self):
-        from django_resource.django.store import DjangoStore
-        return DjangoStore(self)
+    def store(self):
+        return self.store_class(self)
+
+    @property
+    def store_class(self):
+        return get_store_class(self.engine)
 
     @property
     def query(self):
-        return self.data.query
+        return self.store.query
 
     @classmethod
     def get_attributes(cls):
@@ -141,7 +151,7 @@ class Resource(object):
         return self._attributes[key]
 
     def get_field_source_names(self):
-        resolver = self.data.resolver
+        resolver = self.store.resolver
         return resolver.get_field_source_names(self.source)
 
     def get_field(self, key):
@@ -157,7 +167,7 @@ class Resource(object):
 
             resource_id = self.get_id()
             id = f"{resource_id}.{key}"
-            resolver = self.data.resolver
+            resolver = self.store.resolver
             space = None
             if isinstance(field, str) or 'type' not in field:
                 # may need self.space to resolve field type

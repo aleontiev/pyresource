@@ -5,6 +5,13 @@ from django_resource import __version__
 from django_resource.space import Space
 from django_resource.resource import Resource
 from django_resource.server import Server
+from django_resource.schemas import (
+    SpaceSchema,
+    ResourceSchema,
+    FieldSchema,
+    ServerSchema,
+    TypeSchema
+)
 from tests.models import User, Group, Location
 from .utils import Request, Fixture
 
@@ -270,6 +277,19 @@ class IntegrationTestCase(TestCase):
         id = users.get_field("id")
         self.assertEqual(id.resource, users)
 
+        root = server.root
+        schemas = [
+            SpaceSchema, ResourceSchema, TypeSchema, FieldSchema, ServerSchema
+        ]
+        self.assertEqual(
+            [resource.id for resource in root.resources],
+            [s.id for s in schemas]
+        )
+        self.assertEqual(
+            [resource.fields_by_name.keys() for resource in root.resources],
+            [s.fields.keys() for s in schemas]
+        )
+
     def test_get_space(self):
         server = get_server()
         tests = server.spaces_by_name["tests"]
@@ -345,6 +365,7 @@ class IntegrationTestCase(TestCase):
                 "url": "http://localhost/api/",
                 "spaces": ["tests", "."],
                 "can": None,
+                "engine": "django",
                 "features": {
                     "take": True,
                     "where": True,

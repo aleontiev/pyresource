@@ -1,3 +1,4 @@
+import inspect
 from django.template import Template, Context
 from django.utils.functional import cached_property  # noqa
 
@@ -37,7 +38,10 @@ def get(template, context):
 
 
 def as_dict(obj):
-    return {k: v for k, v in obj.__dict__.items() if not k.startswith("_")}
+    if isinstance(obj, type):
+        return {k: v for k, v in inspect.getmembers(obj) if not k.startswith("_")}
+    else:
+        return {k: v for k, v in obj.__dict__.items() if not k.startswith("_")}
 
 
 def merge(source, dest):
