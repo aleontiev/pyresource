@@ -29,6 +29,10 @@ class Space(Resource):
         assert self.server is not None
         return result
 
+    @property
+    def store_class(self):
+        return SpaceStore()
+
     @cached_property
     def by_source(self):
         if self._by_source is None:

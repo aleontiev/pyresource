@@ -1,8 +1,9 @@
 from .expression import execute
 from .utils import as_dict, cached_property
 from .exceptions import SchemaResolverError, ResourceMisconfigured, FieldMisconfigured
-from .store import get_store_class
 from .schemas import ResourceSchema
+from .store import Store
+from .resolver import get_resolver
 
 
 class Resource(object):
@@ -76,6 +77,10 @@ class Resource(object):
                     value = field.get_value()
         return field
 
+    @cached_property
+    def executor(self):
+        pass
+
     def serialize(self):
         return {
             key: self.get_property(key)
@@ -116,11 +121,7 @@ class Resource(object):
 
     @cached_property
     def store(self):
-        return self.store_class(self)
-
-    @property
-    def store_class(self):
-        return get_store_class(self.engine)
+        return Store(self)
 
     @property
     def query(self):
@@ -151,8 +152,12 @@ class Resource(object):
         return self._attributes[key]
 
     def get_field_source_names(self):
-        resolver = self.store.resolver
+        resolver = self.resolver
         return resolver.get_field_source_names(self.source)
+
+    @cached_property
+    def resolver(self):
+        return get_resolver(self.engine)
 
     def get_field(self, key):
         from .field import Field
@@ -167,7 +172,7 @@ class Resource(object):
 
             resource_id = self.get_id()
             id = f"{resource_id}.{key}"
-            resolver = self.store.resolver
+            resolver = self.resolver
             space = None
             if isinstance(field, str) or 'type' not in field:
                 # may need self.space to resolve field type

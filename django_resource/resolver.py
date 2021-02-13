@@ -3,6 +3,14 @@ from .utils import is_literal, get, unliteral
 from .expression import execute, methods
 
 
+def get_resolver(engine):
+    if engine == 'django':
+        from .django.resolver import resolver
+        return resolver
+    else:
+        raise NotImplementedError()
+
+
 class SchemaResolver:
     def get_model(self, source):
         raise NotImplementedError()

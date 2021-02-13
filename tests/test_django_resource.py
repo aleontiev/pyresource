@@ -365,7 +365,6 @@ class IntegrationTestCase(TestCase):
                 "url": "http://localhost/api/",
                 "spaces": ["tests", "."],
                 "can": None,
-                "engine": "django",
                 "features": {
                     "take": True,
                     "where": True,

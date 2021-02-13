@@ -2,56 +2,37 @@ from .utils import cached_property, get
 from .query import Query
 
 
-def get_store_class(engine):
-    if engine == 'django':
-        from .django.store import DjangoStore
-        return DjangoStore
-    elif engine == 'api':
-        raise NotImplementedError()
-    elif engine == 'resource':
-        raise NotImplementedError()
-    else:
-        raise NotImplementedError()
-
-
 class Store:
     def __init__(self, resource):
-        self.server = self.resource = self.space = None
+        self._server = self._resource = self._space = None
         if resource.__class__.__name__ == 'Space':
-            self.space = resource
+            self._space = resource
         elif resource.__class__.__name__ == 'Resource':
-            self.resource = resource
+            self._resource = resource
         elif resource.__class__.__name__ == 'Server':
-            self.server = resource
-
-    def get_space(self):
-        if self.resource:
-            return self.resource.space
-        elif self.space:
-            return self.space
+            self._server = resource
         else:
-            return None
-
-    def get_server(self):
-        if self.resource:
-            return self.resource.space.server
-        if self.space:
-            return self.space.server
-        return self.server
-
-    def get_executor(self):
-        raise NotImplementedError()
-
-    def get_resolver(self):
-        raise NotImplementedError()
+            raise ValueError(f'{resource} is not a valid resource')
 
     @cached_property
-    def executor(self):
-        return self.get_executor()
+    def space(self):
+        if self._resource:
+            return self._resource.space
+        elif self._space:
+            return self._space
+        return None
 
     @cached_property
-    def resolver(self):
-        return self.get_resolver()
+    def server(self):
+        if self._resource:
+            return self._resource.space.server
+        if self._space:
+            return self._space.server
+        return self._server
+
+    @cached_property
+    def resource(self):
+        return self._resource
 
     @property
     def query(self):
@@ -59,21 +40,21 @@ class Store:
 
     def get_query(self, querystring=None):
         initial = {}
-        if self.space:
+        if self._space:
             initial['space'] = self.space.name
-        elif self.resource:
+        elif self._resource:
             initial["resource"] = self.resource.name
-            initial["space"] = self.resource.space.name
+            initial["space"] = self.space.name
 
-        executor = self.executor
+        server = self.server
         if querystring:
             return Query.from_querystring(
                 querystring,
                 state=initial,
-                executor=executor
+                server=server
             )
         else:
             return Query(
                 state=initial,
-                executor=executor
+                server=server
             )

@@ -129,7 +129,6 @@ class ResourceSchema:
 class SpaceSchema:
     id = "spaces"
     name = "spaces"
-    engine = "resource"
     description = "spaces description"
     space = "."
     fields = {
@@ -140,10 +139,6 @@ class SpaceSchema:
             "can": {"get": True, "set": False},
         },
         "name": {"type": "string", "primary": True},
-        "engine": {
-            "type": "string",
-            "default": "django"
-        },
         "can": can,
         "resources": {
             "type": {"type": "array", "items": "@resources"},
@@ -159,7 +154,6 @@ class ServerSchema:
     name = "server"
     singleton = True
     space = "."
-    engine = "resource"
     description = "server description"
     fields = {
         "version": {"type": "string", "default": version},
@@ -170,10 +164,6 @@ class ServerSchema:
             "default": [],
         },
         "can": can,
-        "engine": {
-            "type": "string",
-            "default": "django"
-        },
         "features": {
             "type": {
                 "anyOf": [

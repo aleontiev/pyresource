@@ -1,6 +1,6 @@
 from django_resource.executor import Executor
 from django_resource.translator import ResourceTranslator
-from django_resource.resolver import RequestResolver, SchemaResolver
+from django_resource.resolver import RequestResolver
 from django_resource.exceptions import (
     Forbidden,
     FilterError,
@@ -16,6 +16,8 @@ from django.db.models import Prefetch, F, Value
 from django.contrib.postgres.aggregates import ArrayAgg
 from django_resource.utils import resource_to_django, make_literal
 from .operators import make_expression, make_filter
+# use a single resolver across all executors
+from .resolver import resolver
 from django_resource.conf import settings
 
 
@@ -153,7 +155,6 @@ class DjangoQueryLogic:
         queryset,
         query,
         level=None,
-        resolver=None,
         related=None,
         request=None,
         **context,
@@ -176,7 +177,7 @@ class DjangoQueryLogic:
                 take_field = take.get(field.name)
                 if take_root or (take_field and isinstance(take_field, dict)):
                     # recursively build nested querysets
-                    source = SchemaResolver.get_field_source(field.source)
+                    source = resolver.get_field_source(field.source)
                     source = resource_to_django(source)
                     related = field.related
                     related_level = f"{level}.{field.name}" if level else field.name
@@ -197,7 +198,6 @@ class DjangoQueryLogic:
                         field=field
                     )
                     next_queryset = cls._get_queryset(
-                        resolver,
                         related,
                         related_fields,
                         query,
@@ -256,7 +256,7 @@ class DjangoQueryLogic:
     @classmethod
     def _make_annotation(cls, field, **context):
         is_list = field.is_list
-        source = SchemaResolver.get_field_source(field.source)
+        source = resolver.get_field_source(field.source)
         if isinstance(source, str):
             # string annotation e.g. "user.name"
             source = resource_to_django(source)
@@ -327,9 +327,9 @@ class DjangoQueryLogic:
 
     @classmethod
     def _get_queryset(
-        cls, resolver, resource, fields, query, **context,
+        cls, resource, fields, query, **context,
     ):
-        queryset = cls._get_queryset_base(resolver, resource, **context)
+        queryset = cls._get_queryset_base(resource, **context)
         for add in (
             "prefetches",
             "fields",
@@ -339,7 +339,7 @@ class DjangoQueryLogic:
             "pagination",
         ):
             queryset = getattr(cls, f"_add_queryset_{add}")(
-                resource, fields, queryset, query, resolver=resolver, **context,
+                resource, fields, queryset, query, **context,
             )
         return queryset
 
@@ -357,7 +357,7 @@ class DjangoQueryLogic:
         return source
 
     @classmethod
-    def _get_queryset_base(cls, resolver, resource, related=None, **context):
+    def _get_queryset_base(cls, resource, related=None, **context):
         source = cls._get_queryset_source(resource, related=related)
 
         try:
@@ -372,50 +372,14 @@ class DjangoQueryLogic:
 
 class DjangoExecutor(Executor, DjangoQueryLogic):
 
-    def _get_resources(self, type, query, request=None, prefix=None, **context):
-        """Get many resources from a server or space perspective"""
-        if type == "server":
-            root = context.get("server") or self.store.server
-            child_name = "space"
-        elif type == "space":
-            root = context.get("space") or self.store.space
-            child_name = "resource"
-
-        children = getattr(root, f"{child_name}s_by_name")
-        take = query.state.get("take")
-        data = {}
-        meta = {}
-        for name, child in children.items():
-            shallow = True
-            if take is not None:
-                if not take.get(name, False):
-                    continue
-                if isinstance(take[name], dict):
-                    shallow = False
-            if shallow:
-                data[name] = f"./{name}/"
-            else:
-                subquery = getattr(query.get_subquery(level=name), child_name)(name)
-                subprefix = name if prefix is None else f"{prefix}.{name}"
-                context[child_name] = child
-                subdata = getattr(self, f"get_{child_name}")(
-                    subquery, request=request, prefix=subprefix, **context
-                )
-                # merge the data
-                data[name] = subdata["data"]
-                # merge the metadata if it exists
-                self._merge_meta(meta, subdata.get("meta"), name)
-
-        result = {"data": data}
-        if meta:
-            result["meta"] = meta
-        return result
-
     def _get_resource(
         self, endpoint, query, request=None, prefix=None, resource=None, **context
     ):
         if resource is None:
-            resource = self.store.resource
+            server = query.server
+            resource = query.state.get('resource')
+            space = query.state.get('space')
+            resource = server.get_resource_by_id(f'{space}.{resource}')
 
         can = self._can(resource, f"get.{endpoint}", query, request)
         if not can:
@@ -445,11 +409,10 @@ class DjangoExecutor(Executor, DjangoQueryLogic):
                 resource, fields, query=query, request=request, meta=meta
             )
         else:
-            resolver = self.store.resolver
             if resource.singleton:
                 # get queryset and obtain first record
                 record = self._get_queryset(
-                    resolver, resource, fields, query, request=request, can=can, **context
+                    resource, fields, query, request=request, can=can, **context
                 ).first()
                 if not record:
                     raise ResourceMisconfigured(
@@ -468,7 +431,6 @@ class DjangoExecutor(Executor, DjangoQueryLogic):
                     {} if endpoint == "resource" and settings.PAGINATION_TOTAL else None
                 )
                 queryset = self._get_queryset(
-                    resolver,
                     resource,
                     fields,
                     query,
@@ -517,49 +479,38 @@ class DjangoExecutor(Executor, DjangoQueryLogic):
     def get_field(self, query, request=None, **context):
         return self._get_resource("field", query, request=request, **context)
 
-    def get_server(self, query, request=None, prefix=None, server=None, **context):
-        return self._get_resources(
-            "server", query, request=request, prefix=prefix, **context
-        )
-
-    def get_space(self, query, request=None, prefix=None, **context):
-        return self._get_resources(
-            "space", query, request=request, prefix=prefix, **context
-        )
-
     def get_resource(self, query, request=None, **context):
         return self._get_resource("resource", query, request=request, **context)
 
     def explain_resource(self, query, request=None, resource=None, **context):
-        resource = resource or self.store.resource
+        resource = self._resource_from_query(query, resource)
         return {"data": {"resource": resource.serialize()}}
 
     def explain_record(self, query, **context):
         return self.explain_resource(query, **context)
 
-    def explain_server(self, query, request=None, **context):
-        server = self.store.server
-        return {"data": {"server": server.serialize()}}
-
     def explain_field(self, query, request=None, resource=None, **context):
-        resource = resource or self.store.resource
-        field = query.state.get("field")
+        resource = self._resource_from_query(query, resource)
+        field = query.state.get('field')
         field = resource.fields_by_name[field]
         return {"data": {"field": field.serialize()}}
 
-    def explain_space(self, query, request=None, space=None, **context):
-        space = space or self.store.space
-        return {"data": {"space": space.serialize()}}
+    def _resource_from_query(self, query, resource=None):
+        if resource is None:
+            server = query.server
+            resource = query.state.get('resource')
+            space = query.state.get('space')
+            resource = server.get_resource_by_id(f'{space}.{resource}')
+
+        return resource
 
     def add_resource(self, query, request=None, resource=None, **context):
-        if resource is None:
-            resource = self.store.resource
+        resource = self._resource_from_query(query, resource)
 
         if not self._can(resource, "add.resource", query, request):
             raise Forbidden()
 
         source = resource.source
-        resolver = self.store.resolver
         model = resolver.get_model(source)
 
         fields = self._take_fields(

@@ -1,8 +1,12 @@
 from collections import defaultdict
 from urllib.parse import parse_qs
-from .utils import merge as _merge
+from .utils import (
+    merge as _merge,
+    cached_property,
+    coerce_query_value,
+    coerce_query_values,
+)
 from copy import deepcopy
-from .utils import coerce_query_value, coerce_query_values
 from .exceptions import QueryValidationError, QueryExecutionError
 from .features import (
     get_feature,
@@ -18,52 +22,55 @@ from .features import (
 from .boolean import WhereQueryMixin
 
 
-
 class Query(WhereQueryMixin):
     # methods
-    def __init__(self, state=None, executor=None):
+    def __init__(self, state=None, server=None):
         """
         Arguments:
             state: internal query representation
         """
         self._state = state or {}
-        self.executor = executor
+        self.server = server
 
     def __call__(self, *args, **kwargs):
-        return self.from_querystring(*args, executor=self.executor, state=self.state)
+        return self.from_querystring(*args, server=self.server, state=self.state)
 
     def add(self, record=None, field=None, **context):
-        return self._call('add', record=record, field=field, **context)
+        return self._call("add", record=record, field=field, **context)
 
     def set(self, record=None, field=None, **context):
-        return self._call('set', record=record, field=field, **context)
+        return self._call("set", record=record, field=field, **context)
 
     def get(self, record=None, field=None, **context):
-        return self._call('get', record=record, field=field, **context)
+        return self._call("get", record=record, field=field, **context)
 
     def edit(self, record=None, field=None, **context):
-        return self._call('edit', record=record, field=field, **context)
+        return self._call("edit", record=record, field=field, **context)
 
     def delete(self, record=None, field=None, **context):
-        return self._call('delete', record=record, field=field, **context)
+        return self._call("delete", record=record, field=field, **context)
 
     def options(self, record=None, field=None, **context):
-        return self._call('options', record=record, field=field, **context)
+        return self._call("options", record=record, field=field, **context)
 
     def explain(self, record=None, field=None, **context):
-        return self._call('explain', record=record, field=field, **context)
+        return self._call("explain", record=record, field=field, **context)
+
+    @cached_property
+    def executor(self):
+        return self.server.get_executor(self)
 
     def execute(self, request=None, **context):
         executor = self.executor
         if not executor:
-            raise QueryExecutionError(f'Query cannot execute without executor')
-        action_name = self.state.get('action', 'get')
+            raise QueryExecutionError(f"Query cannot execute without executor")
+        action_name = self.state.get("action", "get")
 
-        if 'action' not in self.state:
+        if "action" not in self.state:
             # add default action "get" into state
-            self.state['action'] = action_name
+            self.state["action"] = action_name
 
-        action = getattr(self.executor, action_name, None)
+        action = getattr(executor, action_name, None)
         if not action:
             raise QueryValidationError(f'Invalid action "{action_name}"')
         return action(self, request=request, **context)
@@ -85,13 +92,13 @@ class Query(WhereQueryMixin):
         state = self.state
         if not level:
             return state
-        parts = level.split('.') if isinstance(level, str) else level
+        parts = level.split(".") if isinstance(level, str) else level
         for index, part in enumerate(parts):
-            if 'take' not in state:
+            if "take" not in state:
                 raise QueryValidationError(
                     f'Invalid level: "{level}" at part "{part}" ({index})'
                 )
-            take = state['take']
+            take = state["take"]
             if part not in take:
                 raise QueryValidationError(
                     f'Invalid level: "{level}" at part "{part}" ({index})'
@@ -126,7 +133,7 @@ class Query(WhereQueryMixin):
 
     @property
     def page(self):
-        return NestedFeature(self, 'page')
+        return NestedFeature(self, "page")
 
     @property
     def sort(self):
@@ -155,7 +162,7 @@ class Query(WhereQueryMixin):
             # cursor arg
             if isinstance(args, list):
                 args = args[0]
-            kwargs['after'] = args
+            kwargs["after"] = args
 
         return self._update({"page": kwargs}, copy=copy, level=level, merge=True)
 
@@ -163,14 +170,14 @@ class Query(WhereQueryMixin):
         kwargs = {}
         for arg in args:
             show = True
-            if arg.startswith('-'):
+            if arg.startswith("-"):
                 arg = arg[1:]
                 show = False
             kwargs[arg] = show
-        return self._update({'take': kwargs}, copy=copy, level=level, merge=True)
+        return self._update({"take": kwargs}, copy=copy, level=level, merge=True)
 
     def _call(self, action, record=None, field=None, **context):
-        if self.state.get('action') != action:
+        if self.state.get("action") != action:
             return getattr(self.action(action), action)(
                 record=record, field=field, **context
             )
@@ -179,9 +186,9 @@ class Query(WhereQueryMixin):
             # redirect back through copy
             args = {}
             if record:
-                args['record'] = record
+                args["record"] = record
             if field:
-                args['field'] = field
+                args["field"] = field
             return getattr(self._update(args), action)(**context)
 
         return self.execute(**context)
@@ -201,12 +208,7 @@ class Query(WhereQueryMixin):
         if args:
             kwargs = args
 
-        return self._update(
-            {"group": kwargs},
-            copy=copy,
-            level=level,
-            merge=True
-        )
+        return self._update({"group": kwargs}, copy=copy, level=level, merge=True)
 
     def __str__(self):
         return str(self.state)
@@ -224,7 +226,7 @@ class Query(WhereQueryMixin):
         sub = state
         # adjust substate at particular level
         # default: adjust root level
-        take = 'take'
+        take = "take"
         if level:
             for part in level.split("."):
                 if take not in sub:
@@ -252,7 +254,7 @@ class Query(WhereQueryMixin):
                 sub[key] = value
 
         if copy:
-            return Query(state=state, executor=self.executor)
+            return Query(state=state, server=self.server)
         else:
             return self
 
@@ -262,10 +264,21 @@ class Query(WhereQueryMixin):
     def get_subquery(self, level=None):
         state = self.state
         substate = self.get_state(level)
+        last_level = level.split('.')[-1] if level else None
         for feature in ROOT_FEATURES:
             if feature in state:
                 substate[feature] = state[feature]
-        return Query(state=substate, executor=self.executor)
+
+        # resource-bound subqueries are resource-bound
+        if last_level and not state.get('resource'):
+            if state.get('space'):
+                # space-bound query, subquery becomes resource-bound
+                substate['resource'] = last_level
+            else:
+                # server-bound query, subquery becomes space-bound
+                substate['space'] = last_level
+
+        return Query(state=substate, server=self.server)
 
     @classmethod
     def _build_update(cls, parts, key, value):
@@ -289,65 +302,65 @@ class Query(WhereQueryMixin):
     @classmethod
     def from_querystring(cls, querystring, **kwargs):
         result = cls(**kwargs)
-        state = kwargs.get('state')
+        state = kwargs.get("state")
 
-        type = 'server'
-        if 'resource' in state:
-            type = 'resource'
-        elif 'space' in state:
-            type = 'space'
+        type = "server"
+        if "resource" in state:
+            type = "resource"
+        elif "space" in state:
+            type = "space"
 
         remainder = None
         space = resource = field = record = None
-        parts = querystring.split('?')
+        parts = querystring.split("?")
         if len(parts) <= 2:
             resource_parts = parts[0]
             remainder = parts[1] if len(parts) == 2 else None
-            resource_parts = [r for r in resource_parts.split('/') if r]
+            resource_parts = [r for r in resource_parts.split("/") if r]
             update = {}
             len_resource = len(resource_parts)
             if len_resource == 1:
-                if type == 'server':
+                if type == "server":
                     space = resource_parts[0]
-                elif type == 'space':
+                elif type == "space":
                     resource = resource_parts[0]
                 else:
                     field = resource_parts[0]
             elif len_resource == 2:
                 # either resource/record or space/resource or record/field
-                if type == 'server':
+                if type == "server":
                     space, resource = resource_parts
-                elif type == 'space':
+                elif type == "space":
                     resource, record = resource_parts
                 else:
                     record, field = resource_parts
             elif len_resource == 3:
-                if type == 'space':
+                if type == "space":
                     resource, record, field = resource_parts
-                elif type == 'server':
+                elif type == "server":
                     space, resource, record = resource_parts
                 else:
-                    raise ValueError(f'Invalid querystring: {querystring}')
+                    raise ValueError(f"Invalid querystring: {querystring}")
             elif len_resource == 4:
-                if type == 'server':
+                if type == "server":
                     space, resource, record, field = resource_parts
                 else:
-                    raise ValueError(f'Invalid querystring: {querystring}')
+                    raise ValueError(f"Invalid querystring: {querystring}")
             elif len_resource > 5:
-                raise ValueError(f'Invalid querystring: {querystring}')
+                raise ValueError(f"Invalid querystring: {querystring}")
 
             if space is not None:
-                update['space'] = space
+                update["space"] = space
             if resource is not None:
-                update['resource'] = resource
+                update["resource"] = resource
             if record is not None:
-                update['record'] = record
+                update["record"] = record
             if field is not None:
-                update['field'] = field
+                update["field"] = field
             if update:
                 result._update(update, copy=False)
         else:
-            raise ValueError(f'Invalid querystring: {querystring}')
+            raise ValueError(f"Invalid querystring: {querystring}")
 
         if remainder:
             query = parse_qs(remainder)
@@ -364,8 +377,8 @@ class Query(WhereQueryMixin):
             feature_part = parts[0]
 
             level = None
-            if '.' in feature_part:
-                level = '.'.join(feature_part.split('.')[1:])
+            if "." in feature_part:
+                level = ".".join(feature_part.split(".")[1:])
                 if not level:
                     level = None
 
@@ -387,17 +400,12 @@ class Query(WhereQueryMixin):
             else:
                 value = coerce_query_values(value)
 
-            if update_key == 'page' and not parts:
+            if update_key == "page" and not parts:
                 # default key for page = cursor
-                parts = ['cursor']
+                parts = ["cursor"]
 
             update = cls._build_update(parts, update_key, value)
-            result._update(
-                update,
-                level=level,
-                merge=feature != SORT,
-                copy=False
-            )
+            result._update(update, level=level, merge=feature != SORT, copy=False)
         if where:
             # WhereQueryMixin
             # special handling

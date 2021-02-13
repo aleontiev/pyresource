@@ -12,6 +12,19 @@ from .features import LEVELED_FEATURES, ROOT_FEATURES
 from .type_utils import get_link
 
 
+def get_executor_class(engine):
+    if engine == 'django':
+        from .django.executor import DjangoExecutor
+        return DjangoExecutor
+    elif engine == 'api':
+        raise NotImplementedError()
+    elif engine == 'resource':
+        raise NotImplementedError()
+    else:
+        raise NotImplementedError()
+
+
+
 class Inspection:
     @classmethod
     def _get_query_state(cls, query, level=None):
@@ -481,8 +494,7 @@ class Executor(
 ):
     """Executes Query, returns dict response"""
 
-    def __init__(self, store, **context):
-        self.store = store
+    def __init__(self, **context):
         self.context = context
 
     def add(self, query, **context):
@@ -501,3 +513,71 @@ class Executor(
                 query: query object
         """
         return self._act("get", query, **context)
+
+
+class MultiExecutor(Executor):
+    def _get_resources(self, type, query, request=None, prefix=None, **context):
+        """Get many resources from a server or space perspective"""
+        server = query.server
+        if type == "server":
+            root = context.get("server") or server
+            child_name = "space"
+        elif type == "space":
+            space_name = query.state.get('space')
+            root = context.get("space") or server.spaces_by_name[space_name]
+            child_name = "resource"
+
+        children = getattr(root, f"{child_name}s_by_name")
+        take = query.state.get("take")
+        data = {}
+        meta = {}
+        for name, child in children.items():
+            shallow = True
+            if take is not None:
+                if not take.get(name, False):
+                    continue
+                if isinstance(take[name], dict):
+                    shallow = False
+            if shallow:
+                data[name] = f"./{name}/"
+            else:
+                subquery = getattr(query.get_subquery(level=name), child_name)(name)
+                subprefix = name if prefix is None else f"{prefix}.{name}"
+                context[child_name] = child
+                executor = server.get_executor(subquery, prefix=subprefix)
+                subdata = getattr(executor, f"get_{child_name}")(
+                    subquery, request=request, prefix=subprefix, **context
+                )
+                # merge the data
+                data[name] = subdata["data"]
+                # merge the metadata if it exists
+                self._merge_meta(meta, subdata.get("meta"), name)
+
+        result = {"data": data}
+        if meta:
+            result["meta"] = meta
+        return result
+
+
+class SpaceExecutor(MultiExecutor):
+    def get_space(self, query, request=None, prefix=None, **context):
+        return self._get_resources(
+            "space", query, request=request, prefix=prefix, **context
+        )
+
+    def explain_space(self, query, request=None, space=None, **context):
+        server = query.server
+        space_name = query.state.get('space')
+        space = space or server.spaces_by_name[space_name]
+        return {"data": {"space": space.serialize()}}
+
+
+class ServerExecutor(MultiExecutor):
+    def get_server(self, query, request=None, prefix=None, server=None, **context):
+        return self._get_resources(
+            "server", query, request=request, prefix=prefix, **context
+        )
+
+    def explain_server(self, query, request=None, **context):
+        server = query.server
+        return {"data": {"server": server.serialize()}}

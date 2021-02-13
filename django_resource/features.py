@@ -10,6 +10,9 @@ WHERE = 'where'
 FIELD = 'field'
 RECORD = 'record'
 DATA = 'data'
+SPACE = 'space'
+RESOURCE = 'resource'
+
 
 LEVELED_FEATURES = {
     GROUP,
@@ -23,7 +26,9 @@ ROOT_FEATURES = {
     ACTION,
     FIELD,
     RECORD,
-    DATA
+    DATA,
+    SPACE,
+    RESOURCE
 }
 FEATURES = LEVELED_FEATURES | ROOT_FEATURES
 
