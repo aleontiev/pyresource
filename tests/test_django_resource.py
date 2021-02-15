@@ -570,7 +570,7 @@ class IntegrationTestCase(TestCase):
         )
 
         prefetch_deep_query = users.query(
-            "?take=*,-name&take.groups=*&take.groups.users=id"
+            "?take=*,-name&take.groups=*&take.groups.users=id,groups"
         )
         prefetch_deep = prefetch_deep_query.get(request=request)
         self.assertEqual(
@@ -586,7 +586,10 @@ class IntegrationTestCase(TestCase):
                             {
                                 "id": str(groupA.id),
                                 "name": groupA.name,
-                                "users": [{"id": str(userB.id)}],
+                                "users": [{
+                                    "id": str(userB.id),
+                                    "groups": [str(groupA.id)]
+                                }],
                                 # userA is not returned to userB
                             }
                         ],
@@ -755,9 +758,28 @@ class IntegrationTestCase(TestCase):
         )
 
         prefetch_deep_query = users.query(
-            "?take=*,-name&take.groups=*&take.groups.users=id"
+            "?take=*,-name&take.groups=*&take.groups.users=id,groups"
         )
         prefetch_deep = prefetch_deep_query.get(request=request)
+        groupA_data = {
+            "id": str(groupA.id),
+            "name": groupA.name,
+            "users": [{
+                "id": str(userA.id),
+                "groups": [str(groupA.id), str(groupB.id)]
+            }, {
+                "id": str(userB.id),
+                "groups": [str(groupA.id)]
+            }],
+        }
+        groupB_data = {
+            "id": str(groupB.id),
+            "name": groupB.name,
+            "users": [{
+                "id": str(userA.id),
+                "groups": [str(groupA.id), str(groupB.id)]
+            }],
+        }
         self.assertEqual(
             prefetch_deep,
             {
@@ -768,18 +790,7 @@ class IntegrationTestCase(TestCase):
                         "is_superuser": userA.is_superuser,
                         "first_name": userA.first_name,
                         "last_name": userA.family_name,
-                        "groups": [
-                            {
-                                "id": str(groupA.id),
-                                "name": groupA.name,
-                                "users": [{"id": str(userA.id)}, {"id": str(userB.id)}],
-                            },
-                            {
-                                "id": str(groupB.id),
-                                "name": groupB.name,
-                                "users": [{"id": str(userA.id)}],
-                            },
-                        ],
+                        "groups": [groupA_data, groupB_data]
                     },
                     {
                         "id": str(userB.id),
@@ -787,14 +798,8 @@ class IntegrationTestCase(TestCase):
                         "is_superuser": userB.is_superuser,
                         "first_name": userB.first_name,
                         "last_name": userB.family_name,
-                        "groups": [
-                            {
-                                "id": str(groupA.id),
-                                "name": groupA.name,
-                                "users": [{"id": str(userA.id)}, {"id": str(userB.id)}],
-                            }
-                        ],
-                    },
+                        "groups": [groupA_data],
+                    }
                 ]
             },
         )
@@ -937,7 +942,7 @@ class IntegrationTestCase(TestCase):
             },
         )
 
-        prefetch_groups = users.query("?take=*&take.groups=*").get(
+        prefetch_groups = users.query("?take=*&take.groups=*,users").get(
             userA.id, request=request
         )
         self.assertEqual(
@@ -951,8 +956,16 @@ class IntegrationTestCase(TestCase):
                     "last_name": userA.family_name,
                     "name": f"{userA.first_name} {userA.family_name}",
                     "groups": [
-                        {"id": str(groupA.id), "name": groupA.name},
-                        {"id": str(groupB.id), "name": groupB.name},
+                        {
+                            "id": str(groupA.id),
+                            "name": groupA.name,
+                            "users": [str(userA.id), str(userB.id)],
+                        },
+                        {
+                            "id": str(groupB.id),
+                            "name": groupB.name,
+                            "users": [str(userA.id)],
+                        },
                     ],
                 }
             },
@@ -1039,3 +1052,29 @@ class IntegrationTestCase(TestCase):
 
         num_groups_value = users.query(f'{userA.id}/num_groups').get(request=request)
         self.assertEqual(num_groups_value, {'data': userA.groups.count()})
+
+    # MVP TODOs:
+    # [x] use prefetch for many-related fields instead of ArrayAgg (bugged) 
+    # [ ] group (aggregation)
+    # [ ] hooks (before/after)
+    # [ ] add
+    # [ ] delete
+    # [ ] set/edit
+    # [ ] API executor (client)
+    #   source:
+    #       url: api.example.io/v0/users/
+    #       authentication:
+    #           for: example.io
+    #           type: basic | key | token | JWT | cookie
+    #           url: api.example.io/v0/login/
+    #           method: post
+    #           headers:
+    #               ...
+    #           data:
+    #               username:
+    #               password:
+    # [ ] resource executor (get/explain only, for root space queries)
+    # [ ] documentation
+
+    # post MVP
+    # - custom properties

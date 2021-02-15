@@ -93,6 +93,9 @@ class DjangoQueryLogic:
             sorts = cls._get_sorts(sort)
 
         state = cls._get_query_state(query, level=level)
+        if state is True:
+            state = {}
+
         sort = state.get("sort", None)
         if sort:
             sorts = cls._get_sorts(sort, translate=resource)
@@ -125,6 +128,9 @@ class DjangoQueryLogic:
             )
 
         state = cls._get_query_state(query, level=level)
+        if state is True:
+            state = {}
+
         record_id = state.get("record", None)
         where = state.get("where", None)
         if where:
@@ -168,6 +174,9 @@ class DjangoQueryLogic:
         This indicates that fields, not just values, should be included
         """
         state = cls._get_query_state(query, level=level)
+        if state is True:
+            return queryset
+
         prefetches = []
         take = state.get("take", {})
         root_field = query.state.get("field", None) if level is None else None
@@ -175,7 +184,12 @@ class DjangoQueryLogic:
         if take or take_root:
             for field in fields:
                 take_field = take.get(field.name)
-                if take_root or (take_field and isinstance(take_field, dict)):
+                if take_root or (
+                    take_field and (
+                        isinstance(take_field, dict) or
+                        (field.is_link and field.is_list)
+                    )
+                ):
                     # recursively build nested querysets
                     source = resolver.get_field_source(field.source)
                     source = resource_to_django(source)
@@ -221,9 +235,12 @@ class DjangoQueryLogic:
     ):
         """Add pagination"""
         if level is not None:
+            # TODO: also paginate nested querysets
             return queryset
 
         state = cls._get_query_state(query, level=level)
+        if state is True:
+            state = {}
         page = state.get("page", {})
         size = int(page.get("size", settings.DEFAULT_PAGE_SIZE))
         after = page.get("after", None)
@@ -292,6 +309,10 @@ class DjangoQueryLogic:
         """
         annotations = {}
         state = cls._get_query_state(query, level=level)
+        if state is True:
+            # id only
+            return queryset.only('pk')
+
         take = state.get("take", None)
         root_field = query.state.get("field", None) if level is None else None
         root_take = query.state.get("take", None)
@@ -301,7 +322,10 @@ class DjangoQueryLogic:
                     # ignore field being prefetched
                     break
             else:
-                if take and isinstance(take.get(field.name), dict):
+                if take and (
+                    isinstance(take.get(field.name), dict) or
+                    (field.is_link and field.is_list)
+                ):
                     # ignore fields being prefetched
                     continue
 

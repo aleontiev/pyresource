@@ -77,7 +77,13 @@ class Selection:
         # if this is a field-oriented request
         take_field = query.state.get("field")
         state = cls._get_query_state(query, level=level)
-        take = state.get("take")
+        if state is True:
+            # link/list, get ID only
+            take = {
+                resource.get_id_field(): True
+            }
+        else:
+            take = state.get("take")
 
         for field in fields:
             if take_field and level is None:

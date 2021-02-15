@@ -44,34 +44,37 @@ Add `django_resource` to `INSTALLED_APPS` in `settings.py`:
 
 ##### Add to settings
 
-Create `DJANGO_RESOURCE` within `settings.py`:
+Create `DJANGO_RESOURCE` and `BASE_URL` within `settings.py`:
 
 ``` python
+    # in production, set this to the server hostname
+    BASE_URL = os.environ.get('BASE_URL', 'localhost')
     DJANGO_RESOURCE = {
+        'PAGE_SIZE': 100
     }
 ```
 
 ##### Add core packages
 
 All resource definitions for a single server should be defined in one subpackage of your project folder.
-The recommended package path is "yourapp.resources" if your app name is "yourapp".
+The recommended package path is "app.resources" (if your app name is "app").
 
-- Create `yourapp/resources/__init__.py`
-- Create `yourapp/resources/spaces/__init__.py`
+- Create `app/resources/__init__.py`
+- Create `app/resources/spaces/__init__.py`
 
 ##### Add server
 
-Create `yourapp/resources/server.py`, the entrypoint to your resource server.
+Create `app/resources/server.py`, the entrypoint to your resource server.
 
 ``` python
     from django_resource.server import Server
 
-    server = Server()
+    server = Server(url=f'{settings.BASE_URL}/api')
 ```
 
 ##### Mount URL
 
-In `yourapp/resources/urls.py` add the lines:
+In `app/resources/urls.py` add the lines:
 
 ``` python
     from .server import server
@@ -82,7 +85,7 @@ In your `urls.py`, add the lines:
 
 ``` python
     urlpatterns += [
-        url(r'^resources', include('yourapp.resources.urls'))
+        url(r'^api', include('app.resources.urls'))
     ]
 ```
 
@@ -94,13 +97,13 @@ At this point, you no longer need to configure any further URLs using Django.
 
 Create space "v0":
 
-- Create `yourapp/resources/spaces/__init__.py`
-- Create `yourapp/resources/spaces/v0/__init__.py`
-- Create `yourapp/resources/spaces/v0/space.py`:
+- Create `app/resources/spaces/__init__.py`
+- Create `app/resources/spaces/v0/__init__.py`
+- Create `app/resources/spaces/v0/space.py`:
 
 ``` python
     from django_resource.space import Space
-    from yourapp.resources.server import server
+    from app.resources.server import server
 
     v0 = Space(name='v0', server=server)
 ```
@@ -109,11 +112,11 @@ Create space "v0":
 
 Create space "v1":
 
-Create `yourapp/resources/spaces/v1/space.py`:
+Create `app/resources/spaces/v1/space.py`:
 
 ``` python
     from django_resource.space import Space
-    from yourapp.resources.server import server
+    from app.resources.server import server
 
     v1 = Space(name='v1', server=server)
 ```
@@ -124,16 +127,17 @@ Create `yourapp/resources/spaces/v1/space.py`:
 
 Create resource "clients" in space "v0":
 
-Create `yourapp/resources/spaces/v0/resources/users.py`:
+- Create `app/resources/spaces/v0/resources/__init__.py`
+- Create `app/resources/spaces/v0/resources/users.py`:
 
 ``` python
     from django_resource.resource import Resource
-    from yourapp.spaces.v0.space import v0
+    from app.spaces.v0.space import v0
 
     clients = Resource(
         space=v0,
         name='clients',
-        model='yourapp.user'   # infer all fields from the model
+        model='app.user'       # infer all fields from the model
         fields='*'             # since there is no groups resource,
                                # the "groups" relation will be rendered as an array of objects
     )
@@ -143,16 +147,16 @@ Create `yourapp/resources/spaces/v0/resources/users.py`:
 
 Create resource "users" in space "v1":
 
-Create `yourapp/resources/spaces/v1/resources/users.py`:
+Create `app/resources/spaces/v1/resources/users.py`:
 
 ``` python
     from django_resource.resource import Resource
     from django_resource.types import Types
-    from yourapp.spaces.v1.space import v1
+    from app.spaces.v1.space import v1
 
     users = Resource(
         name='users',
-        model='yourapp.user',
+        model='app.user',
         fields={
             'id': 'id',                 # map individual fields to model fields
             'avatar': 'profile.avatar', # map through a has-one relationship
@@ -162,7 +166,7 @@ Create `yourapp/resources/spaces/v1/resources/users.py`:
                                             # then the avatar field will be set
             'email': 'email_address',   # remap the name
             'role': {                   # redefine the field (recommended)
-                # auto from model
+                # can be automatically inferred from model:
 
                 'source': 'role',           # the model source
                 'description': 'role'       # description
@@ -171,38 +175,43 @@ Create `yourapp/resources/spaces/v1/resources/users.py`:
                 'index': ['role'],          # index groups or true for self-only
                 'primary': False,           # primary key (default: false)
                 'default': 2,               # default value
-                'options': [{
+                'options': [{               # field choices
                     "value": 1,
                     "label": "normal",
                 }, {
                     "value": 2,
                     "label": "admin",
-                    "can": {
+                    "can": {                # dynamic field choice permissions
                         "set": {"true": ".request.user.is_staff"},
                     }
                 },
 
-                # manual: lazy loading
+                # more advanced features:
 
-                "lazy": {                   # this field is lazy (default False)
-                    "get.resource": True,   # in the list view only
-                },
-
-                # manual: access modifiers
-
-                # these can be set to True, False, an access object, an access array, a Q object, or a lambda
-                # the access object has role keys and True/False values
-                # the access array is a list of access objects
-                # the lambda takes the request and returns one of the simpler types
+                # lazy loading
+                "lazy": True                # this field is lazy (default False)
+                                            # it will not be returned unless requested
+                # access control
+                # by default, full access
                 "can": {
-                    'get': [{"is_staff": True}, {"is_superuser": True}]      # this field can be viewed by staff or superusers (default True)
-                    'set': False,  # this field can not be changed after creation
+                    'get': {
+                        'or': [{
+                            'true': '.request.user.is_staff'
+                        }, {
+                            'true': '.request.user.is_superuser'
+                        }]
+                        # this field can be viewed by staff or superusers (default All)
+                    },
                 }
             },
             'groups': 'groups'
         },
+        # resource
         can={
-            'get, delete, add.resource': True
+            'get': True,
+            'delete, add, set': {
+                'true': '.request.user.is_superuser'
+            }
         },
         features={
             'take': True,
@@ -212,7 +221,7 @@ Create `yourapp/resources/spaces/v1/resources/users.py`:
                 'max_size': 20
             },
             'group': {
-                'aggregators': [
+                'operators': [
                     'sum', 'count', 'max'
                 ]
             },
@@ -226,7 +235,7 @@ Create `yourapp/resources/spaces/v1/resources/users.py`:
 
 Create resource "groups" in space "v1"
 
-Create `yourapp/spaces/v1/resources/groups.py`:
+Create `app/spaces/v1/resources/groups.py`:
 
 ``` python
     from django_resource.resource import Resource

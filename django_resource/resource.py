@@ -219,6 +219,17 @@ class Resource(object):
 
         raise ValueError(f"Resource {self.id} has no primary key field")
 
+    def get_id_field(self):
+        if getattr(self, "_id_field", None):
+            return self._id_field
+
+        for field in self.fields:
+            if field.primary:
+                self._id_field = field.name
+                return self._id_field
+
+        raise ValueError(f"Resource {self.id} has no ID field")
+
     def get_id_attribute(self):
         if getattr(self, "_id_attribute", None):
             return self._id_attribute
