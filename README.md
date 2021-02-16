@@ -42,7 +42,6 @@ This guide walks through each step in creating a small set of resource APIs, ass
 ### Installation
 
 - Run the following:
-    - 
 ``` bash
     pip install pyresource
     # ... or "poetry add pyresource"
