@@ -444,7 +444,7 @@ Many resource and field attributes support expressions that can be used to furth
 Expressions follow these principles:
 - All JSON values are considered valid expressions
 - Any expression is either a literal, an identifier, or an operator
-- A literal expression is either a boolean, a number, a list, a string that starts and ends with " (double-quote), a dictionary with more than one key, or the empty dictionary
+- A literal expression is either a boolean, a number, a list, a string that starts and ends with ' (single-quote), a dictionary with more than one key, or the empty dictionary
 - An identifier expression is a string that is not a literal string
 - An operator expression is a dictionary with a single key (the operator name) and value either:
     - a list of expressions (list argument style), or
@@ -479,9 +479,10 @@ Resource supports many built-in operators:
             "'later'"
         ]
     }, {
-        "if": {
+        "if": [
             {"<": ["date": {"today": {}}]},
             "'earlier'"
+        ]
     }, {
         "else": "'today'"
     }]
@@ -499,7 +500,7 @@ Resource supports many built-in operators:
         "expression": {
             "format": "Hello {.name}, welcome to the server"
         }
-    ]
+    }
 }
 ```
 - layering with `coalesce`:
