@@ -30,9 +30,10 @@ Contents:
 - Each resource belongs to a **space** (a namespace)
 - Resources can have **link**-type fields that reference other resources within the same space
 - Each space is hosted on a **server** which is exposed at a particular URL
-- Users interact with resources by sending **actions** to the server's **endpoints** as HTTP requests
-- Each space, resource, and field belonging to a server (and the server itself) has a unique endpoint and URL
-- Resource constructs a **query** object for each request from the request URL and body
+- Users interact with resources by sending **actions** to the server as HTTP requests
+- Each space, resource, and field belonging to a server (and the server itself) has a unique **endpoint** and URL
+- Resource constructs a **query** object for each request from the request path, querystring, and body
+- Certain querystring parameter groups called **features** are given special treatment
 
 ## Getting Started
 
@@ -177,33 +178,29 @@ Create space "v0":
             'email': 'email_address',   # remap the name
             'role': {                   # redefine the field (recommended)
                 # can be automatically inferred from model:
-
-                'source': 'role',           # the model source
-                'description': 'role'       # description
-                'type': "number",           # type of the field, including nullability
+                'source': {                # the name of the underlying model field, or an expression
+                    'lower': 'role'
+                },
+                'description': 'role'       # description/help-text
+                'type': ["null", "number"], # JSONSchema+ type of the field, including nullability
                 'unique': False,            # uniqueness groups or true for self-only
                 'index': ['role'],          # index groups or true for self-only
-                'primary': False,           # primary key (default: false)
+                'primary': False,           # whether or not this is a primary key
                 'default': 2,               # default value
-                'options': [{               # field choices
+                'options': [{               # choices/options
                     "value": 1,
                     "label": "normal",
                 }, {
                     "value": 2,
                     "label": "admin",
-                    "can": {                # dynamic field choice permissions
+                    "can": {                # option-specific access controls
                         "set": {"true": ".request.user.is_staff"},
                     }
                 },
 
-                # more advanced features:
-
-                # lazy loading
-                "lazy": True                # this field is lazy (default False)
-                                            # it will not be returned unless requested
-                # access control
-                # by default, full access
-                "can": {
+                # more advanced features independent from model layer:
+                "lazy": True                # this field will not be returned unless requested
+                "can": {                    # field-specific access control
                     'get': {
                         'or': [{
                             'true': '.request.user.is_staff'
@@ -216,7 +213,7 @@ Create space "v0":
             },
             'groups': 'groups'
         },
-        # resource
+        # resource access control
         can={
             'get': True,
             'delete, add, set': {
@@ -235,9 +232,11 @@ Create space "v0":
                     'sum', 'count', 'max'
                 ]
             },
-            'explain': True,
+            'inspect': {
+                '
+            },
             'action': True
-        },  # default features: where, take, sort, page, group, explain, action
+        }
     )
 ```
 
@@ -416,6 +415,278 @@ Or to get data from a specific resource:
     print(users.query.get(request=request))
 ```
 
+### Authentication
+
+Resource is authentication-agnostic and can work with any authentication provider/middleware.
+Authentication is not checked explicitly, but may be required indirectly during authorization checks.
+
 ### Authorization
 
-TODO: explain `can`
+Resource uses a flexible access control model that supports both open and closed permissioning styles and is based on a single resource attribute called `can`:
+- If a resource does not specify the `can` attribute, all actions will be allowed for all requests (open permissions, the default behavior)
+- If a resource does specify the `can` attribute, then:
+    - `can` must be an object with action-keys and expression-values
+    - actions against this resource will only be allowed if the expression-value for a matching action-key evaluates to True or to an expression (closed permissions)
+    - if an expression-value evaluates to an expression (rather than a boolean), that expression is applied as a query-filter to the resource (partial access controlled by filters)
+- Fields and field options can also define `can` in a similar fashion (field-specific permissions)
+
+### Expressions
+
+Many resource and field attributes support expressions that can be used to further refine resource declarations, such as:
+- `resource.can`
+- `resource.before`
+- `resource.after`
+- `resource.source`
+- `field.default`
+- `field.source`
+- `field.can`
+
+Expressions follow these principles:
+- All JSON values are considered valid expressions
+- Any expression is either a literal, an identifier, or an operator
+- A literal expression is either a boolean, a number, a list, a string that starts and ends with " (double-quote), a dictionary with more than one key, or the empty dictionary
+- An identifier expression is a string that is not a literal string
+- An operator expression is a dictionary with a single key (the operator name) and value either:
+    - a list of expressions (list argument style), or
+    - a dictionary of expressions (keyword argument style), or
+    - a single literal or identifier expression (single argument style)
+
+Resource supports many built-in operators:
+
+#### Control flow
+
+- looping with `each`:
+``` json
+{
+    "each": {
+        "from": "users",
+        "as": "user",
+        "do": {
+            "custom.notify": {
+                "email": "user.email",
+                "body": "'test'"
+            }
+        }
+    }
+}
+```
+- branching with `case`:
+``` json
+{
+    "case": [{
+        "if": [
+            {">": ["date", {"today": {}}]},
+            "'later'"
+        ]
+    }, {
+        "if": {
+            {"<": ["date": {"today": {}}]},
+            "'earlier'"
+    }, {
+        "else": "'today'"
+    }]
+}
+```
+- aliasing with `with`:
+``` json
+{
+    "with": {
+        "aliases": [{
+            "name": {
+                "join":  ["first_name", "' '", "last_name"]
+            }
+        }],
+        "expression": {
+            "format": "Hello {.name}, welcome to the server"
+        }
+    ]
+}
+```
+- layering with `coalesce`:
+``` json
+{
+    "coalesce": ["users.name", "users.first_name", "'Unknown'"]
+}
+```
+
+#### Arithmetic operations
+
+- list/string/object concatenation/append/merge: `+`
+- object removal by key/list removal by value: `-`
+- numeric binary: `-`, `+`, `/`, `*`, `mod`, `power`, `round`
+- numeric unary: `abs`, `ceil`, `floor`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`
+- numeric generators: `pi`, `e`
+- numeric variadic: `max`, `min`, `avg`, `deviation`
+
+#### Logic operations
+
+- unary negation:
+``` json
+{
+    "not": {"true": ".request.user.is_superuser"}
+}
+```
+- unary predicates:
+``` json
+{
+    "true, false, null, empty": ".request.user.is_superuser"
+}
+```
+- comparison:
+``` json
+{
+    "=, >, <=, >=, =, !=": ["id", 1]
+}
+```
+
+#### List operations
+
+- list reductions: `contains`, `any`, `all`, `index`, `count`, `reduce`, `join`
+``` json
+[{
+    "index, count, contains": ["users.name", "'John'"]
+}, {
+    "any, all": {
+        "from": "users",
+        "as": "user",
+        "where": {"null": ".user"}
+    }
+},
+{
+    "reduce": {
+        "from": "users",
+        "as": "user",
+        "accumulator": "names",
+        "initial": [],
+        "reducer": {"+": [".names", ".user"]}
+    }
+}]
+```
+
+- list manipulations: `distinct`, `filter`, `bucket`, `map`, `key`, `sort`, `slice`, `reverse`, `max`, `min`:
+``` json
+[{
+    "filter": {
+        "from": "users",
+        "as": "user",
+        "where": {"null": ".user"}
+    }
+},
+{
+    "map": {
+        "from": "users",
+        "as": "user",
+        "map": ".user.name"
+    }
+},
+{
+    "key": {
+        "from": "users",
+        "as": "user",
+        "by": ".user.id"
+    }
+},
+{
+    "bucket": {
+        "from": "users",
+        "as": "user",
+        "by": ".user.location"
+    }
+},
+{
+    "sort": {
+        "from": "users",
+        "as": "user",
+        "by": {
+            "lower": ".user.name"
+        }
+    }
+},
+{
+    "slice": ["users", [1, -1]]
+},
+{
+    "max, min, distinct, reverse": "users"
+}]
+```
+
+#### String operations
+
+- string manipulations: `format`, `replace`, `slice`, `trim`, `upper`, `lower`, `title`, `split`, `reverse`:
+``` json
+[
+{
+    "format": "Hello {name}"
+},
+{
+    "replace": {
+        "from": "user.name",
+        "replace": "'M.'",
+        "with": "user.prefix"
+    }
+},
+{
+    "slice": ["user.name", [1, -1]]
+},
+{
+    "split": ["user.name", "' '"]
+},
+{
+    "reverse, lower, title, upper, trim": "user.name"
+}]
+```
+- string reductions: `contains`, `index`, `count`
+(same interface as with lists; the string is treated like a character-list as in Python)
+
+#### Object operations
+
+- object manipulations: `keys`, `values`, `items`
+``` json
+{
+    "keys, values, items": "map"
+}
+```
+
+#### Date/time operations
+
+``` json
+[
+{
+    "today, now": []
+},
+{
+    "delta": ["user.created", {"now": []}]
+}
+]
+```
+
+#### Manual escaping
+
+- evaluating as a literal
+``` json
+{
+    "literal": "user"
+}
+```
+
+- evaluating as an identifier
+``` json
+{
+    "identifier": "user"
+}
+```
+
+#### Custom operations
+
+You can also customize Resource by adding your own operators.
+
+The only requirements are:
+- an operator name
+- whether or not the operator can take arguments as a single value, as a list, and/or as a dict (any one, two, or all three)
+- a Python method or import string referencing a function (ideally free of any side effects for performance reasons)
+  
+### Hooks
+
+Resource provides two properties that support customizing the behavior around built-in actions:
+- `before` is run before the given action(s)
+- `after` is run after the given action(s)
