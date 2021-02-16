@@ -3,6 +3,7 @@ name = "pyresource"
 version = "0.1.0"
 description = "Resource is an SDK for building declarative, feature-rich REST APIs"
 license = "MIT"
+homepage = "https://github.com/aleontiev/pyresource"
 authors = ["Anthony Leontiev <ant@devlit.co>"]
 
 [tool.poetry.dependencies]
