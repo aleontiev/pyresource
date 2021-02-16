@@ -231,9 +231,7 @@ Create space "v0":
                     'sum', 'count', 'max'
                 ]
             },
-            'inspect': {
-                '
-            },
+            'inspect': True,
             'action': True
         }
     )
