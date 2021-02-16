@@ -480,7 +480,7 @@ Resource supports many built-in operators:
         ]
     }, {
         "if": [
-            {"<": ["date": {"today": {}}]},
+            {"<": ["date", {"today": {}}]},
             "'earlier'"
         ]
     }, {
