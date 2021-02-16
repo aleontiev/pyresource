@@ -38,6 +38,10 @@ class FieldMisconfigured(ResourceMisconfigured):
     pass
 
 
+class FieldError(Exception):
+    pass
+
+
 class FilterError(Exception):
     pass
 

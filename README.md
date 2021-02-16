@@ -1,87 +1,98 @@
-# django-resource
+# pyresource
 
-**django-resource** is an implementation of [Resource](https://resource.rest) for Django.
+**pyresource** is a Python implementation of a [resource](https://resource.rest) API server.
+Currently, there is one implemented resource engine: django (allowing for resources that bind to Django models).
+A web engine is in development (allowing for resources that bind to other resource APIs)
 
 Contents:
+  * [Definitions](#definitions)
   * [Getting Started](#getting-started)
-     * [Using pip, pipenv, or poetry](#using-pip-pipenv-or-poetry)
-        * [Installation](#installation-1)
-           * [Add to INSTALLED APPS](#add-to-installed-apps)
-           * [Add to settings](#add-to-settings)
-           * [Add core packages](#add-core-packages)
-           * [Add server](#add-server)
-           * [Mount URL](#mount-url)
-        * [Adding spaces](#adding-spaces-1)
-           * [V0](#v0)
-           * [V1](#v1)
-        * [Adding resources](#adding-resources-1)
-           * [Clients](#clients)
-           * [Users](#users)
-           * [Groups](#groups)
-        * [Running the server](#running-the-server-1)
+    * [Installation](#installation-1)
+       * [Add settings](#add-settings)
+       * [Add server](#add-server)
+       * [Mount server](#mount-server)
+    * [Add spaces](#add-spaces-1)
+       * [V0](#v0)
+       * [V1](#v1)
+    * [Add resources](#add-resources-1)
+       * [Clients](#clients)
+       * [Users](#users)
+       * [Groups](#groups)
+    * [Running the server](#running-the-server-1)
+    * [Web requests](#web-requests-1)
+    * [Python requests](#python-requests-1)
+    * [Authorization](#authorization-1)
+
+## Definitions
+
+- A **resource** is a complex API type, either a *singleton* (referencing one record) or a *collection* (referencing many records)
+- A resource is made up of many **fields**
+- Each resource belongs to a **space** (a namespace)
+- Resources can have **link**-type fields that reference other resources within the same space
+- Each space is hosted on a **server** which is exposed at a particular URL
+- Users interact with resources by sending **actions** to the server's **endpoints** as HTTP requests
+- Each space, resource, and field belonging to a server (and the server itself) has a unique endpoint and URL
+- Resource constructs a **query** object for each request from the request URL and body
 
 ## Getting Started
 
-### Using pip, pipenv, or poetry
+This guide walks through each step in creating a small set of resource APIs, assuming you are starting with a Django project
 
-#### Installation
+### Installation
 
+- Run the following:
+    - 
 ``` bash
-    pip install django_resource
-    # ... or "poetry add django_resource"
-    # ... or "pipenv add django_resource"
+    pip install pyresource
+    # ... or "poetry add pyresource"
+    # ... or "pipenv add pyresource"
 ```
 
-##### Add to INSTALLED APPS
+#### Add settings
 
-Add `django_resource` to `INSTALLED_APPS` in `settings.py`:
-``` python
-    INSTALLED_APPS = [
-        # ..,,
-        'django_resource'
-    ]
-```
-
-##### Add to settings
-
-Create `DJANGO_RESOURCE` and `BASE_URL` within `settings.py`:
+- In your `settings.py`, add `BASE_URL` and use `pyresource.configure` to configure global options:
 
 ``` python
+    # settings.py
+    import pyresource
+
     # in production, set this to the server hostname
     BASE_URL = os.environ.get('BASE_URL', 'localhost')
-    DJANGO_RESOURCE = {
-        'PAGE_SIZE': 100
-    }
+    # add default configuration
+    pyresource.configure({
+        'PAGE_SIZE': 1000,
+        'PAGE_TOTAL': False,
+        'ENGINE': 'django'
+    })
 ```
 
-##### Add core packages
+#### Add server
 
-All resource definitions for a single server should be defined in one subpackage of your project folder.
-The recommended package path is "app.resources" (if your app name is "app").
-
-- Create `app/resources/__init__.py`
-- Create `app/resources/spaces/__init__.py`
-
-##### Add server
-
-Create `app/resources/server.py`, the entrypoint to your resource server.
+- Create `app/resources/server.py`, the entrypoint to your resource server:
 
 ``` python
-    from django_resource.server import Server
+    from django.conf import settings
+    from pyresource.server import Server
 
     server = Server(url=f'{settings.BASE_URL}/api')
 ```
 
-##### Mount URL
+- Touch `app/resources/__init__.py`
 
-In `app/resources/urls.py` add the lines:
+**Note**: all resource definitions for a single server should be defined in one subpackage of your project folder.
+The recommended package path is "app.resources" (if your app name is "app").
+
+#### Mount server
+
+- In `app/resources/urls.py` add the lines:
 
 ``` python
     from .server import server
-    urlpatterns = server.urlpatterns
+    from pyresource.django.urls import get_urlpatterns
+    urlpatterns = get_urlpatterns(server)
 ```
 
-In your `urls.py`, add the lines:
+- In your `urls.py`, add the lines:
 
 ``` python
     urlpatterns += [
@@ -89,49 +100,48 @@ In your `urls.py`, add the lines:
     ]
 ```
 
-At this point, you no longer need to configure any further URLs using Django.
+**Note**: after this point, you no longer need to configure any additional URLs using Django.
+New spaces/resources will automatically be routed to by the server's internal routing.
 
-#### Add spaces
+### Add spaces
 
-##### V0
+#### V0
 
 Create space "v0":
 
-- Create `app/resources/spaces/__init__.py`
-- Create `app/resources/spaces/v0/__init__.py`
 - Create `app/resources/spaces/v0/space.py`:
 
 ``` python
-    from django_resource.space import Space
+    from pyresource.space import Space
     from app.resources.server import server
 
     v0 = Space(name='v0', server=server)
 ```
 
-##### V1
+- Touch `app/resources/spaces/__init__.py`
+- Touch `app/resources/spaces/v0/__init__.py`
 
-Create space "v1":
+#### V1
 
-Create `app/resources/spaces/v1/space.py`:
+- Create `app/resources/spaces/v1/space.py`:
 
 ``` python
-    from django_resource.space import Space
+    from pyresource.space import Space
     from app.resources.server import server
 
     v1 = Space(name='v1', server=server)
 ```
 
-#### Adding resources
+- Touch `app/resources/spaces/v1/__init__.py`
 
-##### Clients
+### Add resources
 
-Create resource "clients" in space "v0":
+#### Clients
 
-- Create `app/resources/spaces/v0/resources/__init__.py`
-- Create `app/resources/spaces/v0/resources/users.py`:
+- Create `app/resources/spaces/v0/resources/clients.py`:
 
 ``` python
-    from django_resource.resource import Resource
+    from pyresource.resource import Resource
     from app.spaces.v0.space import v0
 
     clients = Resource(
@@ -143,15 +153,15 @@ Create resource "clients" in space "v0":
     )
 ```
 
-##### Users
+- Touch `app/resources/spaces/v0/resources/__init__.py`
 
-Create resource "users" in space "v1":
+#### Users
 
-Create `app/resources/spaces/v1/resources/users.py`:
+- Create `app/resources/spaces/v1/resources/users.py`:
 
 ``` python
-    from django_resource.resource import Resource
-    from django_resource.types import Types
+    from pyresource.resource import Resource
+    from pyresource.types import Types
     from app.spaces.v1.space import v1
 
     users = Resource(
@@ -231,14 +241,16 @@ Create `app/resources/spaces/v1/resources/users.py`:
     )
 ```
 
-##### Groups
+- Touch `app/resources/spaces/v1/resources/__init__.py`
+
+#### Groups
 
 Create resource "groups" in space "v1"
 
 Create `app/spaces/v1/resources/groups.py`:
 
 ``` python
-    from django_resource.resource import Resource
+    from pyresource.resource import Resource
 
     groups = Resource(
         name='auth.Group',
@@ -247,10 +259,163 @@ Create `app/spaces/v1/resources/groups.py`:
     )
 ```
 
-#### Running the server
+### Running the server
 
-Run the usual dev server command in a virtual environment using virtualenv/activate, pipenv, or poetry:
+- Run the usual Django development server command in a virtual environment (or use `pipenv run` or `poetry run`)
 
 ``` bash
     python manage.py runserver
 ```
+
+### Web requests
+
+Each of the default actions is conveniently mapped to one of the HTTP verbs, but it is always possible to override the action by using the `action` feature.
+The following default actions can be made against any endpoint (server, space, resource, field), provided the request has access:
+
+#### get
+
+HTTP method: GET
+
+##### get.server
+
+Read data from the server endpoint through one or more of its spaces.
+Example:
+
+```
+-->
+    GET /api/?take.v0.users=*&take.v1.clients=*
+
+<-- 200
+    {
+        "data": {
+            "v0": {
+                "clients": [...]
+            },
+            "v1": {
+                "users": [...]
+            }
+        }
+    }
+```
+
+##### get.space
+
+Read data from the space endpoint through one or more of its resources.
+Example:
+```
+-->
+    GET /api/v1/?take.users=*&take.groups=*
+
+<-- 200
+    {
+        "data": {
+            "users": [...],
+            "groups": [...]
+        }
+    }
+```
+
+##### get.resource
+
+Read data from the resource endpoint through one or more of its fields.
+Example:
+```
+-->
+    GET /api/v1/users/?take.groups=*&take.groups=*
+
+<-- 200
+    {
+        "data": [{
+            "id": 1,
+            "name": "A",
+            "groups": [...]
+        }, {
+            "id": 2,
+            "name": "B",
+            "groups": [...]
+        }]
+    }
+```
+
+##### get.field
+
+Read data from the field endpoint.
+Example:
+```
+-->
+    GET /api/v1/users/1/groups
+
+<-- 200
+    {
+        "data": [1, 2, 3]
+    }
+    
+-->
+    GET /api/v1/users/1/groups?take=*
+
+<-- 200
+    {
+        "data": [{
+            'id': 1,
+            'name': 'groupA'
+        }, {
+            'id': 2,
+            'name': 'groupB'
+        }]
+    }
+```
+
+#### explain
+
+HTTP method: OPTIONS
+
+#### add
+
+HTTP method: POST
+
+#### set
+
+HTTP method: PUT
+
+#### edit
+
+HTTP method: PATCH
+
+#### delete
+
+HTTP method: DELETE
+
+### Python requests
+
+It is also possible to use the Python API to issue requests directly from Python code.
+For example, to get data from the server endpoint:
+
+``` python
+    from .app.resources.server import server
+    from pyresource.request import Request
+    from .app.models import User
+
+    user = User.objects.filter(superuser=True).first()
+    request = Request(user)
+    query = (
+        server.query
+        .take.users('*')
+        .where.users({'in': ['id', [1, 2, 3]]})
+        .take.groups('*')
+    )
+    print(query)
+    data = query.get(request=request)
+    print(data)
+```
+
+Or to get data from a specific resource:
+
+``` python
+    # ...
+    users = server.spaces_by_name['v0'].resources_by_name['users']
+    print(users.query.get(request=request))
+```
+
+### Authorization
+
+TODO: explain `can`

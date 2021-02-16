@@ -1,8 +1,9 @@
 from .expression import execute
 from .utils import as_dict, cached_property
-from .exceptions import SchemaResolverError, ResourceMisconfigured, FieldMisconfigured
+from .exceptions import FieldError, SchemaResolverError, ResourceMisconfigured, FieldMisconfigured
 from .schemas import ResourceSchema
 from .store import Store
+from .conf import settings
 from .resolver import get_resolver
 
 
@@ -15,7 +16,7 @@ class Resource(object):
 
     def __str__(self):
         id = self.get_id()
-        return f"({self.__class__.__name__}: {id})"
+        return f"{self.__class__.__name__}: {id}"
 
     def __hash__(self):
         return hash(str(self))
@@ -58,7 +59,7 @@ class Resource(object):
         """Get attribute (Field) at given key (supporting.nested.paths)
 
         Raises:
-            ValueError if key is not valid
+            AttributeError if key is not valid
         """
         if key is None:
             return self
@@ -68,7 +69,7 @@ class Resource(object):
         last = len(keys)
         if not last:
             this = str(self)
-            raise ValueError(f"{key} is not a valid field of {this}")
+            raise AttributeError(f"{key} is not a valid field of {this}")
         for i, key in enumerate(keys):
             is_last = i == last
             if key:
@@ -76,10 +77,6 @@ class Resource(object):
                 if not is_last:
                     value = field.get_value()
         return field
-
-    @cached_property
-    def executor(self):
-        pass
 
     def serialize(self):
         return {
@@ -102,10 +99,10 @@ class Resource(object):
         else:
             if callable(default):
                 # callable that takes self
-                default = default(self)
-            elif isinstance(default, dict):
+                default = default(self, key=key)
+            else:
                 # expression that takes self
-                default, _ = execute(default, {'fields': self})
+                default, _ = execute(default, {'fields': self, 'config': settings})
             return default
 
     @property
@@ -217,18 +214,7 @@ class Resource(object):
             if field.primary:
                 return field.name
 
-        raise ValueError(f"Resource {self.id} has no primary key field")
-
-    def get_id_field(self):
-        if getattr(self, "_id_field", None):
-            return self._id_field
-
-        for field in self.fields:
-            if field.primary:
-                self._id_field = field.name
-                return self._id_field
-
-        raise ValueError(f"Resource {self.id} has no ID field")
+        raise FieldError(f"Resource {self.id} has no primary key field")
 
     def get_id_attribute(self):
         if getattr(self, "_id_attribute", None):
@@ -239,7 +225,7 @@ class Resource(object):
                 self._id_attribute = name
                 return name
 
-        raise ValueError(f"Resource {self.id} has no ID attribute")
+        raise AttributeError(f"Resource {self.id} has no ID attribute")
 
     def get_id(self):
         id_attribute = self.get_id_attribute()
@@ -269,13 +255,3 @@ class Resource(object):
         for field in self.fields:
             patterns.append(f'{base}{field.name}/')
         return patterns
-
-
-def is_resolved(x):
-    if isinstance(x, Resource):
-        return True
-    if isinstance(x, list) and all((isinstance(c, Resource) for c in x)):
-        return True
-    if isinstance(x, dict) and all((isinstance(c, Resource) for c in x.values())):
-        return True
-    return False

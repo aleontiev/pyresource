@@ -24,7 +24,6 @@ def get_executor_class(engine):
         raise NotImplementedError()
 
 
-
 class Inspection:
     @classmethod
     def _get_query_state(cls, query, level=None):
@@ -41,7 +40,7 @@ class Inspection:
             for feature in LEVELED_FEATURES:
                 state.pop(feature, None)
         else:
-            # shift th elevel, remove root features
+            # shift the level, remove root features
             level = level.split(".")[1:] or None
             state = query.get_state(level)
             state = copy.copy(state)
@@ -80,7 +79,7 @@ class Selection:
         if state is True:
             # link/list, get ID only
             take = {
-                resource.get_id_field(): True
+                resource.id_name: True
             }
         else:
             take = state.get("take")

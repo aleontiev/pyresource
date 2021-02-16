@@ -1,11 +1,12 @@
+"""Tests on Django engine"""
 import base64
 import json
 from django.test import TestCase
-from django_resource import __version__
-from django_resource.space import Space
-from django_resource.resource import Resource
-from django_resource.server import Server
-from django_resource.schemas import (
+from pyresource import __version__
+from pyresource.space import Space
+from pyresource.resource import Resource
+from pyresource.server import Server
+from pyresource.schemas import (
     SpaceSchema,
     ResourceSchema,
     FieldSchema,
@@ -205,7 +206,7 @@ def get_server():
     return server
 
 
-class IntegrationTestCase(TestCase):
+class DjangoIntegrationTestCase(TestCase):
     maxDiff = None
 
     def test_version(self):

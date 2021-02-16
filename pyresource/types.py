@@ -1,17 +1,8 @@
 from .resource import Resource
 from decimal import Decimal
 from .schemas import TypeSchema
-from .type_utils import (
-    is_container,
-    is_link,
-    is_list,
-    get_link,
-    get_split_types,
-    get_type_name,
-    get_type_property,
-    get_type_names,
-    validate
-)
+from .utils.types import is_container
+
 
 class Type(Resource):
     class Schema(TypeSchema):
@@ -27,5 +18,3 @@ class Type(Resource):
         if server:
             kwargs["server"] = server
         return cls(**kwargs)
-
-

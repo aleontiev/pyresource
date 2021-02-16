@@ -67,7 +67,7 @@ class ResourceSchema:
         },
         "engine": {
             "type": "string",
-            "default": "django"
+            "default": ".config.engine"
         },
         "space": {
             "type": "@spaces",

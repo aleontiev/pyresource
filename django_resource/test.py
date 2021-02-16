@@ -1,2 +1,0 @@
-class TestAPIClient(object):
-    pass

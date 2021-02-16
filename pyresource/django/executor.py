@@ -1,7 +1,12 @@
-from django_resource.executor import Executor
-from django_resource.translator import ResourceTranslator
-from django_resource.resolver import RequestResolver
-from django_resource.exceptions import (
+try:
+    from django.db.models import Prefetch, F, Value
+except ImportError:
+    raise Exception('django must be installed')
+
+from pyresource.executor import Executor
+from pyresource.translator import ResourceTranslator
+from pyresource.resolver import RequestResolver
+from pyresource.exceptions import (
     Forbidden,
     FilterError,
     ResourceMisconfigured,
@@ -11,14 +16,13 @@ from django_resource.exceptions import (
     NotFound,
     MethodNotAllowed,
 )
-from django_resource.type_utils import get_link
-from django.db.models import Prefetch, F, Value
+from pyresource.utils.types import get_link
 from django.contrib.postgres.aggregates import ArrayAgg
-from django_resource.utils import resource_to_django, make_literal
+from pyresource.utils import resource_to_django, make_literal
 from .operators import make_expression, make_filter
 # use a single resolver across all executors
 from .resolver import resolver
-from django_resource.conf import settings
+from pyresource.conf import settings
 
 
 class DjangoQueryLogic:

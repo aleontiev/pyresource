@@ -1,4 +1,4 @@
-from django_resource.exceptions import SchemaResolverError
+from pyresource.exceptions import SchemaResolverError
 
 from django.db import models
 from django.db.models.fields import NOT_PROVIDED
@@ -6,8 +6,8 @@ from django.db.models.fields.related import ManyToManyRel, ManyToOneRel
 
 from django.contrib.postgres import fields as postgres
 
-from django_resource.resolver import SchemaResolver
-from django_resource.utils import type_add_null
+from pyresource.resolver import SchemaResolver
+from pyresource.utils import type_add_null
 
 
 class DjangoSchemaResolver(SchemaResolver):

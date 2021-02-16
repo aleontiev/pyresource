@@ -36,9 +36,9 @@ try:
 except:
     MD5 = SHA256 = SHA512 = None
 
-from django_resource.exceptions import FilterError, ExpressionError
-from django_resource.utils import is_literal, resource_to_django
-from django_resource.translator import ResourceTranslator
+from pyresource.exceptions import FilterError, ExpressionError
+from pyresource.utils import is_literal, resource_to_django
+from pyresource.translator import ResourceTranslator
 
 
 # core set of operators

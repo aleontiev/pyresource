@@ -1,9 +1,19 @@
 from .utils import cached_property
 from .type_utils import is_list, get_link, validate, is_nullable
-from .resource import Resource, is_resolved
+from .resource import Resource
 from .expression import execute
 from .schemas import FieldSchema
 from .exceptions import TypeValidationError
+
+
+def is_resolved(x):
+    if isinstance(x, Resource):
+        return True
+    if isinstance(x, list) and all((isinstance(c, Resource) for c in x)):
+        return True
+    if isinstance(x, dict) and all((isinstance(c, Resource) for c in x.values())):
+        return True
+    return False
 
 
 class Field(Resource):
