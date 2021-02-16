@@ -31,15 +31,17 @@ Contents:
        - [edit](#edit)
        - [delete](#delete)
      + [Python requests](#python-requests)
+   * [Getting deeper](#getting-deeper)
      + [Authentication](#authentication)
      + [Authorization](#authorization)
      + [Expressions](#expressions)
        - [Control flow](#control-flow)
        - [Arithmetic operations](#arithmetic-operations)
-       - [Logic operaist operations](#list-operations)
+       - [Logic operations](#logic-operations)
+       - [List operations](#list-operations)
        - [String operations](#string-operations)
        - [Object operations](#object-operations)
-       - [Date/time operations](#date-time-operations)
+       - [Datetime operations](#datetime-operations)
        - [Manual escaping](#manual-escaping)
        - [Custom operations](#custom-operations)
      + [Hooks](#hooks)
@@ -402,6 +404,8 @@ HTTP method: PATCH
 
 HTTP method: DELETE
 
+## Getting deeper
+
 ### Python requests
 
 It is also possible to use the Python API to issue requests directly from Python code.
@@ -666,17 +670,12 @@ Resource supports many built-in operators:
 }
 ```
 
-#### Date/time operations
+#### Datetime operations
 
 ``` json
-[
 {
     "today, now": []
-},
-{
-    "delta": ["user.created", {"now": []}]
 }
-]
 ```
 
 #### Manual escaping
