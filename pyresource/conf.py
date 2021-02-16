@@ -18,8 +18,8 @@ class Settings:
         return self._values.get(key)
 
 defaults = {
-    # DEFAULT_PAGE_SIZE: number of records per page
-    'default_page_size': 50,
+    # PAGE_SIZE: default number of records per page
+    'page_size': 50,
     # PAGE_TOTAL: whether or not total counts are returned
     #   in pagination metadata
     'page_total': True,

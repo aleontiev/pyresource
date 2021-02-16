@@ -9,7 +9,7 @@ from .response import Response
 from .utils import get
 from .expression import execute
 from .features import LEVELED_FEATURES, ROOT_FEATURES
-from .type_utils import get_link
+from .utils.types import get_link
 
 
 def get_executor_class(engine):
@@ -324,7 +324,7 @@ class Serialization:
         results = []
         state = cls._get_query_state(query, level=level)
         field_name = query.state.get("field", None)
-        page_size = state.get("page", {}).get("size", settings.DEFAULT_PAGE_SIZE)
+        page_size = state.get("page", {}).get("size", settings.PAGE_SIZE)
         take = state.get("take")
 
         as_list = False
@@ -449,7 +449,7 @@ class Pagination:
         # TODO: support keyset pagination
         state = cls._get_query_state(query, level=level)
         page = state.get("page", {})
-        size = int(page.get("size", settings.DEFAULT_PAGE_SIZE))
+        size = int(page.get("size", settings.PAGE_SIZE))
         page = page.get("after", None)
         if page is not None:
             page = cls._decode_cursor(page)

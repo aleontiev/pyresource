@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from .resource import Resource
 from .utils import cached_property
-from .types import get_link, get_type_name, get_type_names, get_type_property
+from .utils.types import get_link, get_type_name, get_type_names, get_type_property
 from .resolver import SchemaResolver
 from .schemas import SpaceSchema
 

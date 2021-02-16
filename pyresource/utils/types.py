@@ -1,4 +1,4 @@
-from .exceptions import TypeValidationError
+from pyresource.exceptions import TypeValidationError
 
 
 def is_nullable(T):

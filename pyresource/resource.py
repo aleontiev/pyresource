@@ -88,7 +88,11 @@ class Resource(object):
         return self._get_property(key).add_value(value, index=index)
 
     def get_property(self, key=None):
-        return self._get_property(key).get_value(resolve=False, id=True)
+        try:
+            return self._get_property(key).get_value(resolve=False, id=True)
+        except Exception:
+            print(f'Failed to get property {key} on {self}')
+            raise
 
     def has_option(self, key):
         return key in self._options

@@ -156,7 +156,7 @@ class ServerSchema:
     space = "."
     description = "server description"
     fields = {
-        "version": {"type": "string", "default": version},
+        "version": {"type": "string", "default": f'"{version}"'},
         "url": {"type": "string", "primary": True},
         "spaces": {
             "type": {"type": "array", "items": "@spaces"},

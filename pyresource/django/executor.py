@@ -246,7 +246,7 @@ class DjangoQueryLogic:
         if state is True:
             state = {}
         page = state.get("page", {})
-        size = int(page.get("size", settings.DEFAULT_PAGE_SIZE))
+        size = int(page.get("size", settings.PAGE_SIZE))
         after = page.get("after", None)
         offset = 0
         if after:
@@ -416,7 +416,7 @@ class DjangoExecutor(Executor, DjangoQueryLogic):
         source = resource.source
         if endpoint == "resource":
             page_size = int(
-                query.state.get("page", {}).get("size", settings.DEFAULT_PAGE_SIZE)
+                query.state.get("page", {}).get("size", settings.PAGE_SIZE)
             )
 
         meta = {}
@@ -456,7 +456,7 @@ class DjangoExecutor(Executor, DjangoQueryLogic):
                 )
             else:
                 count = (
-                    {} if endpoint == "resource" and settings.PAGINATION_TOTAL else None
+                    {} if endpoint == "resource" and settings.PAGE_TOTAL else None
                 )
                 queryset = self._get_queryset(
                     resource,

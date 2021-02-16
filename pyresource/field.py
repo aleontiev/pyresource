@@ -1,5 +1,5 @@
 from .utils import cached_property
-from .type_utils import is_list, get_link, validate, is_nullable
+from .utils.types import is_list, get_link, validate, is_nullable
 from .resource import Resource
 from .expression import execute
 from .schemas import FieldSchema
