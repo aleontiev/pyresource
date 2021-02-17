@@ -580,7 +580,7 @@ Resource supports many built-in operators:
             }
         }],
         "expression": {
-            "format": "Hello {.name}, welcome to the server"
+            "format": "'Hello {.name}, welcome to the server'"
         }
     }
 }
