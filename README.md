@@ -51,7 +51,7 @@ Contents:
 - A **resource** is a complex API type, either a *singleton* (referencing one record) or a *collection* (referencing many records)
 - A resource is made up of many **fields** which themselves have meta fields, including a JSONSchema **type**
 - Each resource belongs to a **space** (namespace)
-- Resources can have **link**-type fields that reference other resources within the same space
+- Resources can have **link** fields that reference other resources within the same space
 - Each space is hosted on a **server** which is exposed at a particular URL
 - Users interact with resources by sending **actions** to the server as HTTP requests
 - Each space, resource, and field belonging to a server (and the server itself) has a unique **endpoint** and URL
@@ -339,14 +339,15 @@ Example:
 
 Read data from the resource endpoint through one or more of its fields.
 - To include or exclude specific fields, use `take`
-- To prefetch related resources, rendering them as objects instead of identifiers, use `take.related`
-- To filter out rows, use `where`
-- To set ordering, use `sort`|
+- By default, links will be rendered as primary identifiers
+- To instead render a link as an objects, use feature scoping: `take.related` to trigger "prefetching"
+- To filter out rows, use `where` (feature scoping can be applied to filter out related records)
+- To set an ordering, use `sort` (feature scoping can be applied to sort the related fields)
 
 Example:
 ```
 -->
-    GET /api/v1/users/?take.groups=id&where:groups.id=1&sort=id
+    GET /api/v1/users/?take=id,name&take.groups=id&where:groups.id=1&sort=id
 
 <-- 200
     {
@@ -362,11 +363,12 @@ Example:
     }
 ```
 
+Resource uses pagination
+
 ##### get.record
 
 Read data from the record endpoint through one or more of its fields.
 
-Example:
 ```
 -->
     GET /api/v1/users/1/
@@ -379,23 +381,50 @@ Example:
             "groups": [1, 2]
         }
     }
-    
+```
+
+Features like `where`, `sort`, `take` work here too:
+```
+-->
+    GET /api/v1/users/1/?where.groups:id=1&take=*,-name
+
+<-- 200
+    {
+        "data": {
+            "id": 1,
+            "groups": [1]
+        }
+    }
 ```
 
 ##### get.field
 
-Read data from the field endpoint (using `take` triggers prefetching)
-
-Example:
+Read data from the field endpoint:
 ```
 -->
     GET /api/v1/users/1/groups
 
 <-- 200
     {
-        "data": [1, 2, 3]
+        "data": [1, 2]
     }
-    
+```
+
+Features like `where`, `sort`, and `take` are available for link fields:
+```
+-->
+    GET /api/v1/users/1/groups?where:name:contains=A
+
+<-- 200
+    {
+        "data": [1]
+    }
+
+```
+
+
+If `take` is specified, related data is also prefetched:
+```
 -->
     GET /api/v1/users/1/groups?take=*
 

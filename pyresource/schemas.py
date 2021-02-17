@@ -136,7 +136,7 @@ class SpaceSchema:
         "url": {
             "type": "string",
             "source": {"concat": ["server.url", "name", "'/'"]},
-            "can": {"get": True, "set": False},
+            "can": {"get": True},
         },
         "name": {"type": "string", "primary": True},
         "can": can,
@@ -195,7 +195,7 @@ class FieldSchema:
     space = "."
     description = "Description of fields"
     fields = {
-        "id": {"type": "string", "primary": True,},
+        "id": {"type": "string", "primary": True},
         "resource": {"type": "@resources", "inverse": "fields"},
         "source": {"type": "any"},
         "inverse": {"type": ["null", "string"]},
@@ -210,7 +210,37 @@ class FieldSchema:
         "url": {
             "type": "string",
             "source": {"concat": ["resource.url", "name", "'/'",]},
-            "can": {"get": True, "set": False},
+            "can": {"get": True}
+        },
+        "options": {
+            "type": {
+                "anyOf": [{
+                    "type": "null"
+                }, {
+                    "type": "array",
+                    "items": {
+                        "anyOf": [{
+                            "type": "object",
+                            "properties": {
+                                "value": "any",
+                                "label": "string",
+                                "can": can
+                            },
+                            "required": ["value"]
+                        }, {
+                            "type": ["string", "number"]
+                        }]
+                    }
+                }]
+            },
+            "example": [{
+                "value": 1,
+                "label": "admin",
+                "can": {"set": {"true": ".request.user.is_superuser"}}
+            }, {
+                "value": 2,
+                "label": "default",
+            }]
         },
         "description": {"type": ["null", "string"]},
         "example": {"type": "any"},
