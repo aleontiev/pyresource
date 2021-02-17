@@ -49,14 +49,15 @@ Contents:
 ## Definitions
 
 - A **resource** is a complex API type, either a *singleton* (referencing one record) or a *collection* (referencing many records)
-- A resource is made up of many **fields**
-- Each resource belongs to a **space** (a namespace)
+- A resource is made up of many **fields** which themselves have meta fields, including a JSONSchema **type**
+- Each resource belongs to a **space** (namespace)
 - Resources can have **link**-type fields that reference other resources within the same space
 - Each space is hosted on a **server** which is exposed at a particular URL
 - Users interact with resources by sending **actions** to the server as HTTP requests
 - Each space, resource, and field belonging to a server (and the server itself) has a unique **endpoint** and URL
 - Resource constructs a **query** object for each request from the request path, querystring, and body
 - Certain querystring parameter groups called **features** are given special treatment
+- Each server has a meta space called "." that contains meta resources for `resources`, `spaces`, `server`, `fields`, and `types`
 
 ## Getting Started
 
@@ -337,28 +338,54 @@ Example:
 ##### get.resource
 
 Read data from the resource endpoint through one or more of its fields.
+- To include or exclude specific fields, use `take`
+- To prefetch related resources, rendering them as objects instead of identifiers, use `take.related`
+- To filter out rows, use `where`
+- To set ordering, use `sort`|
+
 Example:
 ```
 -->
-    GET /api/v1/users/?take.groups=*&take.groups=*
+    GET /api/v1/users/?take.groups=id&where:groups.id=1&sort=id
 
 <-- 200
     {
         "data": [{
             "id": 1,
             "name": "A",
-            "groups": [...]
+            "groups": [{"id": 1}]
         }, {
             "id": 2,
             "name": "B",
-            "groups": [...]
+            "groups": [{"id": 1}, {"id": 2}]
         }]
     }
 ```
 
+##### get.record
+
+Read data from the record endpoint through one or more of its fields.
+
+Example:
+```
+-->
+    GET /api/v1/users/1/
+
+<-- 200
+    {
+        "data": {
+            "id": 1,
+            "name": "userA",
+            "groups": [1, 2]
+        }
+    }
+    
+```
+
 ##### get.field
 
-Read data from the field endpoint.
+Read data from the field endpoint (using `take` triggers prefetching)
+
 Example:
 ```
 -->
@@ -409,8 +436,8 @@ HTTP method: DELETE
 ### Python requests
 
 It is also possible to use the Python API to issue requests directly from Python code.
-For example, to get data from the server endpoint:
 
+For example, to get data from the server endpoint:
 ``` python
     from .app.resources.server import server
     from pyresource.request import Request
@@ -430,7 +457,6 @@ For example, to get data from the server endpoint:
 ```
 
 Or to get data from a specific resource:
-
 ``` python
     # ...
     users = server.spaces_by_name['v0'].resources_by_name['users']
@@ -444,13 +470,17 @@ Authentication is not checked explicitly, but may be required indirectly during 
 
 ### Authorization
 
-Resource uses a flexible access control model that supports both open and closed permissioning styles and is based on a single resource attribute called `can`:
+Resource uses a flexible access control model that is based on an attribute called `can` that exists on `server`, `space`, `resource`, and `field`:
+
 - If a resource does not specify the `can` attribute, all actions will be allowed for all requests (open permissions, the default behavior)
 - If a resource does specify the `can` attribute, then:
     - `can` must be an object with action-keys and expression-values
     - actions against this resource will only be allowed if the expression-value for a matching action-key evaluates to True or to an expression (closed permissions)
     - if an expression-value evaluates to an expression (rather than a boolean), that expression is applied as a query-filter to the resource (partial access controlled by filters)
-- Fields and field options can also define `can` in a similar fashion (field-specific permissions)
+- Fields may also define `can` (to limit access to fields in certain contexts)
+- Field options may also define `can` (to limit access to setting options)
+- Spaces may also define `can` (to limit access to space-wide queries)
+- Servers may also define `can` (to limit access to server-wide queries)
 
 ### Expressions
 
@@ -462,6 +492,7 @@ Many resource and field attributes support expressions that can be used to furth
 - `field.default`
 - `field.source`
 - `field.can`
+- `field.options.can`
 
 Expressions follow these principles:
 - All JSON values are considered valid expressions
