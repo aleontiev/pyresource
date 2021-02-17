@@ -699,7 +699,7 @@ Resource supports many built-in operators:
 ``` json
 [
 {
-    "format": "Hello {name}"
+    "format": "'Hello {name}'"
 },
 {
     "replace": {
