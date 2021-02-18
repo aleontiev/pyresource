@@ -21,15 +21,41 @@ Contents:
      + [Running the server](#running-the-server)
      + [Web requests](#web-requests)
        - [get](#get)
-         * [get.server](#getserver)
-         * [get.space](#getspace)
          * [get.resource](#getresource)
+         * [get.record](#getrecord)
          * [get.field](#getfield)
-       - [explain](#explain)
+         * [get.space](#getspace)
+         * [get.server](#getserver)
        - [add](#add)
+         * [add.resource](#addresource)
+         * [add.record](#addrecord)
+         * [add.field](#addfield)
+         * [add.space](#addspace)
+         * [add.server](#addserver)
        - [set](#set)
+         * [set.resource](#setresource)
+         * [set.record](#setrecord)
+         * [set.field](#setfield)
+         * [set.space](#setspace)
+         * [set.server](#setserver)
        - [edit](#edit)
+         * [edit.resource](#editresource)
+         * [edit.record](#editrecord)
+         * [edit.field](#editfield)
+         * [edit.space](#editspace)
+         * [edit.server](#editserver)
        - [delete](#delete)
+         * [delete.resource](#deleteresource)
+         * [delete.record](#deleterecord)
+         * [delete.field](#deletefield)
+         * [delete.space](#deletespace)
+         * [delete.server](#deleteserver)
+       - [explain](#explain)
+         * [explain.resource](#deleteresource)
+         * [explain.record](#deleterecord)
+         * [explain.field](#deletefield)
+         * [explain.space](#deletespace)
+         * [explain.server](#deleteserver)
      + [Python requests](#python-requests)
    * [Getting deeper](#getting-deeper)
      + [Authentication](#authentication)
@@ -294,13 +320,218 @@ The following default actions can be made against any endpoint (server, space, r
 
 #### get
 
-HTTP method: GET
+The `get` action is an intent to read data from the server.
+It is associated with the HTTP method "GET" and has the following manifestations:
+
+##### get.resource
+
+The `get.resource` action is an intent to read data from the resource endpoint through one or more of its fields.
+
+Examples:
+
+Get select user fields for all users in a group starting with the letter `A`:
+```
+-->
+    GET /api/v1/users/?take=id,name&take.groups=id&where:groups.name:starts=A&sort=id
+
+<-- 200
+    {
+        "data": [{
+            "id": 1,
+            "name": "A",
+            "groups": [{"id": 1}]
+        }, {
+            "id": 2,
+            "name": "B",
+            "groups": [{"id": 1}, {"id": 2}]
+        }]
+    }
+```
+
+Get all user IDs and all of their group IDs in pages and sub-pages of size 2:
+```
+-->
+    GET /api/v1/users/?take.groups=id&page:size=2&page.groups:size=2
+<-- 200
+    {
+        "data": [{
+            "id": 1,
+            "groups": [{
+                "id": 1,
+            }, {
+                "id": 2
+            }]
+        }, {
+            "id": 2,
+            "groups": [{
+                "id": 1,
+            }, {
+                "id": 2
+            }]
+        }],
+        "meta": {
+            "page": {
+                "data": {
+                    "next": "...tokenA..."
+                },
+                "data.0.groups": {
+                    "next": "...tokenB..."
+                },
+                "data.1.groups": {
+                    "next": "...tokenC..."
+                }
+            }
+        }
+    }
+```
+
+**Note**: When creating pagination links, resource uses base64-encoded **request tokens** which are returned for each paginated data `path` under `meta.page.path.next`.
+To use these tokens, make a POST request to the server endpoint that includes a JSON encoded object with the token provided under the key "query".
+
+Get the next page of user data from the previous request:
+```
+-->
+    POST /api/
+    {"query": "...tokenA...}
+    
+<-- 200
+    {
+        "data": [{
+            "id": 3,
+            "groups": [{
+                "id": 1,
+            }, {
+                "id": 2
+            }]
+        }, {
+            "id": 4,
+            "groups": [{
+                "id": 1,
+            }, {
+                "id": 2
+            }]
+        }],
+        "meta": {
+            "page": {...}
+        }
+    }
+
+```
+
+**Note**: resource will only return pagination metadata if a next page exists, otherwise it will not return anything.
+Clients can therefore expect that there are more pages of data for any given request/response only if pagination tokens appear in `meta.page`.
+
+##### get.record
+
+The `get.record` action is an intent to read data from the record endpoint through one or more of the resource's fields.
+
+Examples:
+
+Get data for user 1:
+```
+-->
+    GET /api/v1/users/1/
+
+<-- 200
+    {
+        "data": {
+            "id": 1,
+            "name": "userA",
+            "groups": [1, 2]
+        }
+    }
+```
+
+**Note**: features like `where`, `sort`, `take` work here too!
+
+Get data for user 1, return groups starting with the letter "A", exclude the name field:
+```
+-->
+    GET /api/v1/users/1/?where.groups:name:contains=A&take=*,-name
+
+<-- 200
+    {
+        "data": {
+            "id": 1,
+            "groups": [1]
+        }
+    }
+```
+
+##### get.field
+
+The `get.field` action is an intent to read data from the field endpoint for a specific field.
+
+Examples:
+
+Get group IDs for user 1:
+```
+-->
+    GET /api/v1/users/1/groups
+
+<-- 200
+    {
+        "data": [1, 2]
+    }
+```
+
+**Note**: features like `where`, `sort`, and `take` are available for link fields.
+
+
+Get group IDs for user 1 where name startswith letter "A"
+```
+-->
+    GET /api/v1/users/1/groups?where:name:starts=A
+
+<-- 200
+    {
+        "data": [1]
+    }
+
+```
+
+**Note**: if `take` is specified, related data is also prefetched.
+
+Get group data for user 1's groups:
+```
+-->
+    GET /api/v1/users/1/groups?take=*
+
+<-- 200
+    {
+        "data": [{
+            'id': 1,
+            'name': 'groupA'
+        }, {
+            'id': 2,
+            'name': 'groupB'
+        }]
+    }
+```
+
+##### get.space
+
+The `get.space` action is an intent to read data from the space endpoint through one or more of its resources.
+
+Get `users` and `groups` from `v1`:
+```
+-->
+    GET /api/v1/?take.users=*&take.groups=*
+
+<-- 200
+    {
+        "data": {
+            "users": [...],
+            "groups": [...]
+        }
+    }
+```
 
 ##### get.server
 
-Read data from the server endpoint through one or more of its spaces.
-Example:
+The `get.server` action is an intent to read data from the server endpoint through one or more of its spaces and their resources.
 
+Get `users` from `v0` and also `clients` from `v1`:
 ```
 -->
     GET /api/?take.v0.users=*&take.v1.clients=*
@@ -318,13 +549,313 @@ Example:
     }
 ```
 
-##### get.space
+#### add
 
-Read data from the space endpoint through one or more of its resources.
-Example:
+The `add` action is an intent to add data to one or more resources.
+It is associated with the HTTP method "POST" and has the following manifestations:
+
+#### add.resource
+
+The `add.resource` action is an intent to add data for a particular resource.
+
+Create a user:
 ```
 -->
-    GET /api/v1/?take.users=*&take.groups=*
+    POST /api/v1/users?take=*
+    {
+        "data": {
+            "name": "user A"
+        }
+    }
+    
+<-- 201
+    {
+        "data": {
+            "id": 123,
+            "name": "user A",
+            "created": "2020-01-01T00:00:00Z"
+        }
+    }
+```
+
+Create multiple users (one succeeds and one fails):
+```
+-->
+    POST /api/v1/users?take=*
+    {
+        "data": [{
+            "name": "user A"
+        }, {
+            "name": "user B"
+        }]
+    }
+    
+<-- 400
+    {
+        "data": [{
+            "id": 123,
+            "name": "user A",
+            "created": "2020-01-01T00:00:00Z"
+        }],
+        "errors": {
+            "data.1": {
+                "name": ["there is already a user with name 'user B'"]
+            }
+        }
+    }
+```
+
+Create multiple users, all-or-nothing (atomic):
+```
+-->
+    POST /api/v1/users?take=*&atomic
+    {
+        "data": [{
+            "name": "user A"
+        }, {
+            "name": "user B"
+        }, {
+            "name": "user C"
+        }]
+    }
+    
+<-- 400
+    {
+        "errors": {
+            "data.0": "succeeded, then rolled back due to error in data.1"
+            "data.1": {
+                "name": ["there is already a user with name 'user B'"]
+            },
+            "data.2": "skipped due to error in data.1"
+        }
+    }
+```
+
+#### add.field
+
+The `add.field` action is an intent to add-and-link a related object; it is only supported for link fields.
+
+Create a group and associate it with user 1:
+```
+-->
+    POST /api/v1/users/1/group?take=*
+    {
+        "data": {
+            "name": "test group"
+        }
+    }
+    
+<-- 201
+    {
+        "data": {
+            "id": 123,
+            "name": "test group",
+            "created": "2020-01-01T00:00:00Z"
+        }
+    }
+```
+
+#### add.record
+
+The `add.record` action is not implemented
+
+##### add.space
+
+The `add.space` action is an intent to add data from the space endpoint through one or more of its resources.
+
+Add `users` and `groups` in the `v1` space and return them:
+```
+-->
+    POST /api/v1/?take.users=*&take.groups=*
+    {
+        "data": {
+            "users": [{
+                "name": "john"
+            }],
+            "groups": [{
+                "name": "A"
+            }, {
+                "name": "B"
+            }]
+        }
+    }
+
+<-- 201
+    {
+        "data": {
+            "users": [...],
+            "groups": [...]
+        }
+    }
+```
+
+##### add.server
+
+The `add.server` action is an intent to add data from the server endpoint through one or more of its spaces and their resources.
+
+Add `v0.users` and also `v1.clients`:
+```
+-->
+    POST /api/
+    {
+        "data": {
+            "v0": {
+                "clients": [...]
+            },
+            "v1": {
+                "users": [...]
+            }
+        }
+    }
+    
+<-- 201
+```
+
+#### set
+
+The `set` action is an intent to modify data in one or more resources.
+It is associated with the HTTP method "PUT" and has the following manifestations:
+
+#### set.resource
+
+The `set.resource` action is an intent to modify data in bulk for a particular resource.
+
+Update multiple users by ID (one succeeds and one fails):
+```
+-->
+    PUT /api/v1/users/?take=*
+    {
+        "data": [{
+            "id": 1,
+            "name": "user A"
+        }, {
+            "id": 2,
+            "name": "user B"
+        }]
+    }
+    
+<-- 400
+    {
+        "data": [{
+            "id": 123,
+            "name": "user A",
+            "created": "2020-01-01T00:00:00Z",
+            "updated": "2020-01-02T00:00:00Z"
+        }],
+        "errors": {
+            "data.1": {
+                "name": ["there is already a user with name 'user B'"]
+            }
+        }
+    }
+```
+
+Update multiple users by ID, all-or-nothing (atomic):
+```
+-->
+    PUT /api/v1/users?take=*&atomic
+    {
+        "data": [{
+            "id": 1,
+            "name": "user A"
+        }, {
+            "id": 2,
+            "name": "user B"
+        }, {
+            "id": 3,
+            "name": "user C"
+        }]
+    }
+    
+<-- 400
+    {
+        "errors": {
+            "data.0": "succeeded, then rolled back due to error in data.1"
+            "data.1": {
+                "name": ["there is already a user with name 'user B'"]
+            },
+            "data.2": "skipped due to error in data.1"
+        }
+    }
+```
+
+Update all users:
+```
+-->
+    PUT /api/v1/users/
+    {
+        "data": {
+            "name": "userA"
+        }
+    }
+    
+<-- 200
+    {
+        "data": 150
+    }
+```
+
+**Note**: instead of the data, a count of updated records is returned for bulk update operations
+
+#### set.field
+
+The `set.field` action is an intent to set a particular field to a new value.
+
+Set the name of a user
+```
+-->
+    PUT /api/v1/users/1/name
+    {
+        "data": "user A"
+    }
+    
+<-- 200
+```
+
+#### set.record
+
+The `set.record` action is an intent to modify data for a particular record.
+
+Update a user:
+```
+-->
+    PUT /api/v1/users/1/?take=name,updated
+    {
+        "data": {
+            "name": "user A"
+        }
+    }
+    
+<-- 200
+    {
+        "data": {
+            "name": "user A",
+            "updated": "2020-01-01T00:00:00Z"
+        }
+    }
+```
+
+
+##### set.space
+
+The `set.space` action is an intent to update data from the space endpoint through one or more of its resources.
+
+Set `v1/users/1` and `v1/groups/1` and return them:
+```
+-->
+    PUT /api/v1/?take.users=*&take.groups=*
+    {
+        "data": {
+            "users": [{
+                "id": 1,
+                "name": "john"
+            }],
+            "groups": [{
+                "id": 1,
+                "name": "A"
+            }]
+        }
+    }
 
 <-- 200
     {
@@ -335,130 +866,214 @@ Example:
     }
 ```
 
-##### get.resource
+##### set.server
 
-Read data from the resource endpoint through one or more of its fields.
-- To include or exclude specific fields, use `take`
-- By default, links will be rendered as primary identifiers
-- To instead render a link as an objects, use feature scoping: `take.related` to trigger "prefetching"
-- To filter out rows, use `where` (feature scoping can be applied to filter out related records)
-- To set an ordering, use `sort` (feature scoping can be applied to sort the related fields)
+The `set.server` action is an intent to update data from the server endpoint through one or more of its spaces and their resources.
 
-Example:
+Set `v0/users/1` and also `v1/clients/2`:
 ```
 -->
-    GET /api/v1/users/?take=id,name&take.groups=id&where:groups.id=1&sort=id
-
-<-- 200
-    {
-        "data": [{
-            "id": 1,
-            "name": "A",
-            "groups": [{"id": 1}]
-        }, {
-            "id": 2,
-            "name": "B",
-            "groups": [{"id": 1}, {"id": 2}]
-        }]
-    }
-```
-
-Resource uses pagination
-
-##### get.record
-
-Read data from the record endpoint through one or more of its fields.
-
-```
--->
-    GET /api/v1/users/1/
-
-<-- 200
+    PUT /api/
     {
         "data": {
-            "id": 1,
-            "name": "userA",
-            "groups": [1, 2]
+            "v0": {
+                "clients": [{
+                    "id": 2,
+                    "name": "A"
+                }]
+            },
+            "v1": {
+                "users": [{
+                    "id": 1,
+                    "name": "B"
+                }]
+            }
         }
     }
-```
-
-Features like `where`, `sort`, `take` work here too:
-```
--->
-    GET /api/v1/users/1/?where.groups:id=1&take=*,-name
-
+    
 <-- 200
-    {
-        "data": {
-            "id": 1,
-            "groups": [1]
-        }
-    }
 ```
-
-##### get.field
-
-Read data from the field endpoint:
-```
--->
-    GET /api/v1/users/1/groups
-
-<-- 200
-    {
-        "data": [1, 2]
-    }
-```
-
-Features like `where`, `sort`, and `take` are available for link fields:
-```
--->
-    GET /api/v1/users/1/groups?where:name:contains=A
-
-<-- 200
-    {
-        "data": [1]
-    }
-
-```
-
-
-If `take` is specified, related data is also prefetched:
-```
--->
-    GET /api/v1/users/1/groups?take=*
-
-<-- 200
-    {
-        "data": [{
-            'id': 1,
-            'name': 'groupA'
-        }, {
-            'id': 2,
-            'name': 'groupB'
-        }]
-    }
-```
-
-#### explain
-
-HTTP method: OPTIONS
-
-#### add
-
-HTTP method: POST
-
-#### set
-
-HTTP method: PUT
 
 #### edit
 
-HTTP method: PATCH
+The `edit` action is an intent to partially modify data in one or more records in one or more resources.
+It is associated with the HTTP method "PATCH" and has the following manifestations:
+
+#### edit.resource
+
+The `edit.resource` action is an intent to modify data in bulk for a particular resource.
+
+Update multiple users by ID (one succeeds and one fails):
+```
+-->
+    PATCH /api/v1/users/?take=*
+    {
+        "data": [{
+            "id": 1,
+            "name": "user A"
+        }, {
+            "id": 2,
+            "name": "user B"
+        }]
+    }
+    
+<-- 400
+    {
+        "data": [{
+            "id": 123,
+            "name": "user A",
+            "created": "2020-01-01T00:00:00Z",
+            "updated": "2020-01-02T00:00:00Z"
+        }],
+        "errors": {
+            "data.1": {
+                "name": ["there is already a user with name 'user B'"]
+            }
+        }
+    }
+```
+
+Update multiple users by ID, all-or-nothing (atomic):
+```
+-->
+    PATCH /api/v1/users?take=*&atomic
+    {
+        "data": [{
+            "id": 1,
+            "name": "user A"
+        }, {
+            "id": 2,
+            "name": "user B"
+        }, {
+            "id": 3,
+            "name": "user C"
+        }]
+    }
+    
+<-- 400
+    {
+        "errors": {
+            "data.0": "succeeded, then rolled back due to error in data.1"
+            "data.1": {
+                "name": ["there is already a user with name 'user B'"]
+            },
+            "data.2": "skipped due to error in data.1"
+        }
+    }
+```
+
+Update all users:
+
+```
+-->
+    PATCH /api/v1/users/
+    {
+        "data": {
+            "name": "userA"
+        }
+    }
+    
+<-- 200
+    {
+        "data": 150
+    }
+```
+
+**Note**: instead of the data, a count of updated records is returned for bulk update operations
+
+#### edit.field
+
+The `edit.field` action allows for linking and unlinking related resources. TODO
+
+#### edit.record
+
+The `edit.record` action is an intent to modify data for a particular record.
+
+Update a user:
+```
+-->
+    PUT /api/v1/users/1/?take=name,updated
+    {
+        "data": {
+            "name": "user A"
+        }
+    }
+    
+<-- 200
+    {
+        "data": {
+            "name": "user A",
+            "updated": "2020-01-01T00:00:00Z"
+        }
+    }
+```
+
+
+##### edit.space
+
+The `edit.space` action is an intent to update data from the space endpoint through one or more of its resources.
+
+Edit `v1/users/1` and `v1/groups/1` and return them:
+```
+-->
+    PATCH /api/v1/?take.users=*&take.groups=*
+    {
+        "data": {
+            "users": [{
+                "id": 1,
+                "name": "john"
+            }],
+            "groups": [{
+                "id": 1,
+                "name": "A"
+            }]
+        }
+    }
+
+<-- 200
+    {
+        "data": {
+            "users": [...],
+            "groups": [...]
+        }
+    }
+```
+
+##### edit.server
+
+The `edit.server` action is an intent to update data from the server endpoint through one or more of its spaces and their resources.
+
+Edit `v0/users/1` and also `v1/clients/2`:
+```
+-->
+    PATCH /api/
+    {
+        "data": {
+            "v0": {
+                "clients": [{
+                    "id": 2,
+                    "name": "A"
+                }]
+            },
+            "v1": {
+                "users": [{
+                    "id": 1,
+                    "name": "B"
+                }]
+            }
+        }
+    }
+    
+<-- 200
+```
 
 #### delete
 
 HTTP method: DELETE
+
+#### explain
+
+HTTP method: OPTIONS
 
 ## Getting deeper
 
@@ -541,14 +1156,9 @@ Resource supports many built-in operators:
 ``` json
 {
     "each": {
-        "from": "users",
-        "as": "user",
-        "do": {
-            "custom.notify": {
-                "email": "user.email",
-                "body": "'test'"
-            }
-        }
+        "in": "...expression...",
+        "as": "...expression...",
+        "do": "...expression..."
     }
 }
 ```
@@ -557,16 +1167,16 @@ Resource supports many built-in operators:
 {
     "case": [{
         "if": [
-            {">": ["date", {"today": {}}]},
-            "'later'"
+            "...expression...",
+            "...expression..."
         ]
     }, {
         "if": [
-            {"<": ["date", {"today": {}}]},
-            "'earlier'"
+            "...expression...",
+            "...expression..."
         ]
     }, {
-        "else": "'today'"
+        "else": "...expression..."
     }]
 }
 ```
@@ -574,29 +1184,42 @@ Resource supports many built-in operators:
 ``` json
 {
     "with": {
-        "aliases": [{
-            "name": {
-                "join":  ["first_name", "' '", "last_name"]
-            }
-        }],
-        "expression": {
-            "format": "'Hello {.name}, welcome to the server'"
-        }
+        "as": [{
+            "name": "...expression...",
+            "value": "...expression..."
+        }, "..."],
+        "get": "...expression..."
     }
 }
 ```
+
 - layering with `coalesce`:
 ``` json
 {
-    "coalesce": ["users.name", "users.first_name", "'Unknown'"]
+    "coalesce": ["...expression...", "...", "...expression..."]
 }
 ```
 
 #### Arithmetic operations
 
-- list/string/object concatenation/append/merge: `+`
-- object removal by key/list removal by value: `-`
-- numeric binary: `-`, `+`, `/`, `*`, `mod`, `power`, `round`
+- addition, list/string/object concatenation/append/merge: `+`:
+``` json
+{
+    "+": ["...expression...", "...", "...expression..."]
+}
+```
+- subtraction, list/object removal: `-`:
+``` json
+{
+    "-": ["...expression...", "...", "...expression..."]
+}
+```
+- other math operations, list/object removal (`-`):
+``` json
+{
+    "/, mod, power, round": ["...expression...", "...expression..."]
+}
+```
 - numeric unary: `abs`, `ceil`, `floor`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`
 - numeric generators: `pi`, `e`
 - numeric variadic: `max`, `min`, `avg`, `deviation`
@@ -606,19 +1229,19 @@ Resource supports many built-in operators:
 - unary negation:
 ``` json
 {
-    "not": {"true": ".request.user.is_superuser"}
+    "not": "...expression..."
 }
 ```
 - unary predicates:
 ``` json
 {
-    "true, false, null, empty": ".request.user.is_superuser"
+    "true, false, null, empty": "...expression..."
 }
 ```
 - comparison:
 ``` json
 {
-    "=, >, <=, >=, =, !=": ["id", 1]
+    "=, >, <=, >=, =, !=": ["...expression...", "...expression..."]
 }
 ```
 
@@ -627,21 +1250,21 @@ Resource supports many built-in operators:
 - list reductions: `contains`, `any`, `all`, `index`, `count`, `reduce`, `join`
 ``` json
 [{
-    "index, count, contains": ["users.name", "'John'"]
+    "index, count, contains": ["...expression...", "...expression..."]
 }, {
     "any, all": {
-        "from": "users",
-        "as": "user",
-        "where": {"null": ".user"}
+        "from": "...expression...",
+        "as": "...expression...",
+        "where": "...expression..."
     }
 },
 {
     "reduce": {
-        "from": "users",
-        "as": "user",
-        "accumulator": "names",
-        "initial": [],
-        "reducer": {"+": [".names", ".user"]}
+        "from": "...expression...",
+        "as": "...expression...",
+        "accumulator": "...expression...",
+        "initial": "...expression...",
+        "reducer": "...expression..."
     }
 }]
 ```
@@ -650,46 +1273,30 @@ Resource supports many built-in operators:
 ``` json
 [{
     "filter": {
-        "from": "users",
-        "as": "user",
-        "where": {"null": ".user"}
+        "in": "...expression...",
+        "as": "...expression...",
+        "where": "...expression..."
     }
 },
 {
     "map": {
-        "from": "users",
-        "as": "user",
-        "map": ".user.name"
+        "in": "...expression...",
+        "as": "...expression...",
+        "map": "...expression..."
     }
 },
 {
-    "key": {
-        "from": "users",
-        "as": "user",
-        "by": ".user.id"
+    "sort, key, bucket": {
+        "in": "...expression...",
+        "as": "...expression...",
+        "by": "...expression..."
     }
 },
 {
-    "bucket": {
-        "from": "users",
-        "as": "user",
-        "by": ".user.location"
-    }
+    "slice": ["...expression...", "...expression..."]
 },
 {
-    "sort": {
-        "from": "users",
-        "as": "user",
-        "by": {
-            "lower": ".user.name"
-        }
-    }
-},
-{
-    "slice": ["users", [1, -1]]
-},
-{
-    "max, min, distinct, reverse": "users"
+    "max, min, distinct, reverse": "...expression..."
 }]
 ```
 
@@ -699,23 +1306,23 @@ Resource supports many built-in operators:
 ``` json
 [
 {
-    "format": "'Hello {name}'"
+    "format": "...expression..."
 },
 {
     "replace": {
-        "from": "user.name",
-        "replace": "'M.'",
-        "with": "user.prefix"
+        "in": "...expression...",
+        "find": "...expression...",
+        "replace": "...expression..."
     }
 },
 {
-    "slice": ["user.name", [1, -1]]
+    "slice": ["...expression...", "...expression..."]
 },
 {
-    "split": ["user.name", "' '"]
+    "split": ["...expression...", "...expression..."]
 },
 {
-    "reverse, lower, title, upper, trim": "user.name"
+    "reverse, lower, title, upper, trim": "...expression..."
 }]
 ```
 - string reductions: `contains`, `index`, `count`
@@ -726,7 +1333,7 @@ Resource supports many built-in operators:
 - object manipulations: `keys`, `values`, `items`
 ``` json
 {
-    "keys, values, items": "map"
+    "keys, values, items": "...expression..."
 }
 ```
 
@@ -740,17 +1347,24 @@ Resource supports many built-in operators:
 
 #### Manual escaping
 
-- evaluating as a literal
+- evaluating arguments literally
 ``` json
 {
-    "literal": "user"
+    "literal": "any"
 }
 ```
 
-- evaluating as an identifier
+- evaluating argument as an identifier
 ``` json
 {
-    "identifier": "user"
+    "identifier": "string"
+}
+```
+
+- evaluting argument as an object:
+``` json
+{
+    "object": "object"
 }
 ```
 
