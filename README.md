@@ -329,10 +329,34 @@ The `get.resource` action is an intent to read data from the resource endpoint t
 
 Examples:
 
-Get select user fields for all users in a group starting with the letter `A`:
+Get users, default fields:
 ```
 -->
-    GET /api/v1/users/?take=id,name&take.groups=id&where:groups.name:starts=A&sort=id
+    GET /api/v1/users/
+    
+<-- 200
+    {
+        "data": [{
+            "id": 1,
+            "name": "A",
+            "groups": [{"id": 1}]
+        }, {
+            "id": 2,
+            "name": "B",
+            "groups": [{"id": 1}, {"id": 2}]
+        }, {
+            "id": 3,
+            "name": "C",
+            "groups": [{"id": 1}, {"id": 2}, {"id": 3}]
+        }]
+    }
+```
+
+Get users, `id` and `name` fields only:
+
+```
+-->
+    GET /api/v1/users/?take=id,name
 
 <-- 200
     {
@@ -348,7 +372,36 @@ Get select user fields for all users in a group starting with the letter `A`:
     }
 ```
 
-Get all user IDs and all of their group IDs in pages and sub-pages of size 2:
+Get users whose name starts with "A", default fields except `groups`:
+```
+-->
+    GET /api/v1/users/?where:name:starts=A&take=*,-groups
+
+<-- 200
+    {
+        "data": [{
+            "id": 1,
+            "name": "A"
+        }]
+    }
+```
+
+Get count and max ID across all users:
+```
+-->
+    GET /api/v1/users/?group:count:num=*&group:max:max_id=id
+<-- 200
+    {
+        "data": {
+            "num": 3,
+            "max_id": 
+        }
+    }
+```
+**Note**: whenever `group` is used, the result is expected to be a dictionary with one value for each aggregation
+If `group` is not being used, all queries are subject to pagination in order to prevent the API server from attempting to retrieve and serialize extremely large datasets.
+
+Get all users with `id` and `groups.id` in pages (and sub-pages) of size 2:
 ```
 -->
     GET /api/v1/users/?take.groups=id&page:size=2&page.groups:size=2
