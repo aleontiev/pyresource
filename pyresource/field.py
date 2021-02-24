@@ -67,7 +67,7 @@ class Field(Resource):
             self.set_value(value)
 
     def get_from_expression(self, source):
-        return execute(source, {'fields': self.parent})[0]
+        return execute(source, {'fields': self.parent})
 
     @cached_property
     def related(self):

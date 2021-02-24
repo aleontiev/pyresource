@@ -106,7 +106,7 @@ class Resource(object):
                 default = default(self, key=key)
             else:
                 # expression that takes self
-                default, _ = execute(default, {'fields': self, 'config': settings})
+                default = execute(default, {'fields': self, 'globals': settings})
             return default
 
     @property

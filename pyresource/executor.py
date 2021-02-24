@@ -226,12 +226,28 @@ class Authorization:
     @classmethod
     def _can_take_field(cls, field, action, query=None, request=None):
         can = field.can
+        default = settings.DEFAULT_FIELD_CAN
+        depends = field.depends
+
+        if can is None:
+            can = default
+        elif default is not None:
+            default = copy.copy(default)
+            default.update(can)
+            can = default
+
+        if depends is not None:
+            # if this fields has a "depends", it is an expression that must evaluate truthy
+            ok = execute(depends, {"request": request, "query": query.state, "globals": settings})
+            if not ok:
+                return False
+
         if can is not None:
             if action in can:
                 can = can[action]
                 if isinstance(can, dict):
                     can_dict = can
-                    can, _ = execute(can, {"request": request, "query": query.state})
+                    can = execute(can, {"request": request, "query": query.state, "globals": settings})
                 return can
             return False
         else:

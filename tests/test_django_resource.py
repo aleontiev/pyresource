@@ -81,15 +81,15 @@ def get_server():
         name="session",
         space=tests,
         singleton=True,
-        can={"login": True, "logout": True, "get": True},
+        can={"login": True, "logout": True, "get": True, "explain": True},
         fields={"user": {"type": ["null", "@users"], "source": ".request.user"},},
         actions={
             "login": {
                 "method": login,
                 "fields": {
-                    "username": {"type": "string", "can": {"set": True}},
-                    "password": {"type": "string", "can": {"set": True}},
-                    "status": {"type": "string", "can": {"get": True}},
+                    "username": {"type": "string", "can": {"get": False}},
+                    "password": {"type": "string", "can": {"get": False}},
+                    "status": {"type": "string", "can": {"set": False}},
                 },
             },
             "logout": logout,
@@ -98,7 +98,7 @@ def get_server():
     groups = Resource(
         id="tests.groups",
         name="groups",
-        source={"queryset": {"model": "tests.group", "where": {"true": "is_active"}}},
+        source={"queryset": {"model": "tests.group", "where": "is_active"}},
         space=tests,
         fields={
             "id": "id",
@@ -106,13 +106,13 @@ def get_server():
             "users": {
                 "source": {"queryset": {"field": "users", "sort": "created"}},
                 "lazy": True,
-                "can": {"get": True},
+                "can": {"set": False},
             },
-            "created": {"lazy": True, "can": {"get": True}},
-            "updated": {"lazy": True, "can": {"get": True}},
+            "created": {"lazy": True, "can": {"set": False}},
+            "updated": {"lazy": True, "can": {"set": False}},
         },
         can={
-            "*": {"true": ".request.user.is_superuser"},
+            "*": ".request.user.is_superuser",
             "get": {"=": ["users", ".request.user.id"]},
         },
     )
@@ -123,7 +123,7 @@ def get_server():
         source={
             "queryset": {
                 "model": "tests.user",
-                "where": {"true": "is_active"},
+                "where": "is_active",
                 "sort": "created",
             }
         },
@@ -135,7 +135,7 @@ def get_server():
             "name": {
                 "type": "string",
                 "source": {"concat": ["first_name", '" "', "family_name"],},
-                "can": {"get": True,},
+                "can": {"set": False},
             },
             "email": "email",
             "num_groups": {
@@ -144,7 +144,7 @@ def get_server():
                 },
                 "type": "number",
                 "lazy": True,
-                "can": {"get": True}
+                "can": {"set": False}
             },
             "groups": {
                 "lazy": True,
@@ -153,28 +153,29 @@ def get_server():
                     # can only set if the new value is smaller {'>': ['.changes.groups', 'groups']}
                     # can only set if name is not changing {'null': '.changes.name'}
                     "add": True,
-                    "get": True,
                     "prefetch": True,
                 },
                 "source": {
                     "queryset": {
                         "field": "groups",
                         "sort": "name",
-                        "where": {"true": "is_active"},
+                        "where": "is_active"
                     }
                 },
             },
             "is_superuser": {
-                "can": {
-                    "get": {"true": ".request.user.is_superuser"},
-                    "set": {"true": ".request.user.is_superuser"}
+                "depends": {
+                    "or": [
+                        ".request.user.is_superuser",
+                        ".request.user.is_staff"
+                    ]
                 }
             },
-            "created": {"lazy": True, "default": {"now": {}}, "can": {"get": True}},
-            "updated": {"lazy": True, "default": {"now": {}}, "can": {"get": True}},
+            "created": {"lazy": True, "default": {"now": {}}, "can": {"set": False}},
+            "updated": {"lazy": True, "default": {"now": {}}, "can": {"set": False}},
         },
         can={
-            "*": {"true": ".request.user.is_superuser"},
+            "*": ".request.user.is_superuser",
             "get, change-password": {"=": ["id", ".request.user.id"]},
         },
         before={
@@ -184,13 +185,13 @@ def get_server():
             "change-password": {
                 "method": change_password,
                 "fields": {
-                    "old_password": {"type": "string", "can": {"set": True}},
+                    "old_password": {"type": "string", "can": {"get": False}},
                     "new_password": {
                         "type": {"type": "string", "min_length": 10,},
-                        "can": {"set": True},
+                        "can": {"get": False},
                     },
-                    "confirm_password": {"type": "string", "can": {"set": True}},
-                    "changed": {"type": "boolean", "can": {"get": True}},
+                    "confirm_password": {"type": "string", "can": {"get": False}},
+                    "changed": {"type": "boolean", "can": {"set": False}},
                 },
             }
         },

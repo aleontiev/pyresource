@@ -24,7 +24,14 @@ defaults = {
     #   in pagination metadata
     'page_total': True,
     # ENGINE: default resource engine
-    'engine': 'django'
+    'engine': 'django',
+    # DEFAULT_FIELD_CAN: default field permissions
+    'default_field_can': {
+        'get': True,
+        'set': True,
+        'add': False,
+        'prefetch': False
+    }
 }
 settings = Settings(defaults)
 

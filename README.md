@@ -398,7 +398,7 @@ Get count and max ID across all users:
         }
     }
 ```
-**Note**: whenever `group` is used, the result is expected to be a dictionary with one value for each aggregation
+**Note**: whenever `group` is used, the result is expected to be a dictionary with one value for each aggregation.
 If `group` is not being used, all queries are subject to pagination in order to prevent the API server from attempting to retrieve and serialize extremely large datasets.
 
 Get all users with `id` and `groups.id` in pages (and sub-pages) of size 2:

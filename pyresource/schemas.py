@@ -67,7 +67,7 @@ class ResourceSchema:
         },
         "engine": {
             "type": "string",
-            "default": ".config.engine"
+            "default": ".globals.engine"
         },
         "space": {
             "type": "@spaces",
@@ -236,12 +236,13 @@ class FieldSchema:
             "example": [{
                 "value": 1,
                 "label": "admin",
-                "can": {"set": {"true": ".request.user.is_superuser"}}
+                "can": {"set": ".request.user.is_superuser"}
             }, {
                 "value": 2,
                 "label": "default",
             }]
         },
+        "depends": {"type": ["null", "string", "object"]},
         "description": {"type": ["null", "string"]},
         "example": {"type": "any"},
         "type": {"type": "type"},

@@ -349,6 +349,9 @@ def make_expression(value):
 
 
 def make_filter(where, translate=None):
+    if isinstance(where, str):
+        where = {'true': where}
+
     if not isinstance(where, (dict, list)):
         raise FilterError('"where" must be a dict or list')
 
