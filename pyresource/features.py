@@ -12,6 +12,7 @@ RECORD = 'record'
 DATA = 'data'
 SPACE = 'space'
 RESOURCE = 'resource'
+PARAMETERS = 'parameters'
 
 
 LEVELED_FEATURES = {
@@ -28,7 +29,8 @@ ROOT_FEATURES = {
     RECORD,
     DATA,
     SPACE,
-    RESOURCE
+    RESOURCE,
+    PARAMETERS
 }
 FEATURES = LEVELED_FEATURES | ROOT_FEATURES
 
