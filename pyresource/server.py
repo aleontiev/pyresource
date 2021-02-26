@@ -53,7 +53,6 @@ class Server(Resource):
             space=".",
             name=".",
             server=self,
-            engine="resource",
             resources=[
                 "spaces",
                 "resources",

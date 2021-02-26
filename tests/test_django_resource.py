@@ -43,7 +43,27 @@ def get_fixture():
 
 
 server = None
+client = None
 
+
+def get_client():
+    global client
+    if client is not None:
+        return client
+
+    client = Server.from_source({
+        "api": {
+            "authentication": {
+                "type": "token",
+                "bearer": "JWT",
+                "header": "X-JWT",
+                "token": "..."
+            },
+            "url": "http://localhost/api/"
+        }
+    })
+    tests = client.spaces_by_name['tests']
+    users = tests.resources_by_name['users']
 
 def get_server():
     global server
@@ -81,15 +101,34 @@ def get_server():
         name="session",
         space=tests,
         singleton=True,
-        can={"login": True, "logout": True, "get": True, "explain": True},
-        fields={"user": {"type": ["null", "@users"], "source": ".request.user"},},
+        can={
+            "login.resource": True,
+            "logout.resource": True,
+            "get": True,
+            "explain": True
+        },
+        fields={
+            "user": {
+                "type": ["null", "@users"],
+                "source": ".request.user"
+            }
+        },
         actions={
             "login": {
                 "method": login,
                 "fields": {
-                    "username": {"type": "string", "can": {"get": False}},
-                    "password": {"type": "string", "can": {"get": False}},
-                    "status": {"type": "string", "can": {"set": False}},
+                    "username": {
+                        "type": "string",
+                        "can": {"get": False}
+                    },
+                    "password": {
+                        "type": "string",
+                        "can": {"get": False}
+                    },
+                    "status": {
+                        "type": "string",
+                        "can": {"set": False}
+                    },
                 },
             },
             "logout": logout,
@@ -98,7 +137,12 @@ def get_server():
     groups = Resource(
         id="tests.groups",
         name="groups",
-        source={"queryset": {"model": "tests.group", "where": "is_active"}},
+        source={
+            "queryset": {
+                "model": "tests.group",
+                "where": "is_active"
+            }
+        },
         space=tests,
         fields={
             "id": "id",
@@ -241,7 +285,7 @@ class DjangoIntegrationTestCase(TestCase):
             "&page.users:after=ABC"
             "&sort.groups=-created,id"
             "&where.groups:updated:gte=created"
-            '&where.users:name:contains="Joe"'
+            "&where.users:name:contains='Joe'"
         )
         query4 = (
             tests.query.take.users("*", "-name")
@@ -249,7 +293,7 @@ class DjangoIntegrationTestCase(TestCase):
             .take.groups("id")
             .sort.groups("-created", "id")
             .where.groups({"gte": ["updated", "created"]})
-            .where.users({"contains": ["name", '"Joe"']})
+            .where.users({"contains": ["name", "'Joe'"]})
         )
         self.assertEqual(query3.state, query4.state)
         self.assertEqual(
@@ -264,7 +308,7 @@ class DjangoIntegrationTestCase(TestCase):
                     "users": {
                         "page": {"after": "ABC", "size": 5},
                         "take": {"*": True, "name": False},
-                        "where": {"contains": ["name", '"Joe"']},
+                        "where": {"contains": ["name", "'Joe'"]},
                     },
                 },
                 "space": "tests",
@@ -367,10 +411,14 @@ class DjangoIntegrationTestCase(TestCase):
                 "url": "http://localhost/api/",
                 "spaces": ["tests", "."],
                 "can": None,
+                "source": None,
                 "features": {
                     "take": True,
                     "where": True,
-                    "page": {"size": 50, "max_size": 100},
+                    "page": {
+                        "size": 50,
+                        "max_size": 100
+                    },
                     "group": True,
                     "sort": True,
                     "inspect": True,

@@ -26,12 +26,17 @@ defaults = {
     # ENGINE: default resource engine
     'engine': 'django',
     # DEFAULT_FIELD_CAN: default field permissions
-    'default_field_can': {
+    'field_can': {
         'get': True,
         'set': True,
         'add': False,
         'prefetch': False
-    }
+    },
+    # ATOMIC: whether or not actions are meant to be performed
+    # in a transaction or with transaction-like mechanics
+    # (commit on success, rollback on failure)
+    # if this is set to False, partial error responses may occur
+    'atomic': True
 }
 settings = Settings(defaults)
 

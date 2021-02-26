@@ -35,7 +35,7 @@ class Resource(object):
         # fields: map of resource fields (using Field class)
         self._fields = {}
 
-        if self.get_meta('id') == 'resources':
+        if self.get_meta_attribute('id') == 'resources':
             space = self.get_option('space')
             if space.name != '.':
                 # normal resources trigger a binding with their space
@@ -140,7 +140,7 @@ class Resource(object):
                 raise AttributeError(f"{key} is not a valid property of {self}")
 
             field = fields[key]
-            resource_id = self.get_meta('id')
+            resource_id = self.get_meta_attribute('id')
             id = f"{resource_id}.{key}"
 
             self._attributes[key] = Field.make(
@@ -203,13 +203,14 @@ class Resource(object):
         return self._fields[key]
 
     @classmethod
-    def as_record(cls, **kwargs):
-        id = cls.get_meta("id")
+    def meta(cls, **kwargs):
+        id = cls.get_meta_attribute("id")
         fields = cls.get_attributes()
-        options = cls.get_meta()
+        options = cls.get_meta_attribute()
         options["fields"] = ["{}.{}".format(id, key) for key in fields.keys()]
         for key, value in kwargs.items():
             options[key] = value
+        options['engine'] = 'meta'
         return Resource(**options)
 
     @cached_property
@@ -243,7 +244,7 @@ class Resource(object):
         return self.get_option(id_attribute, default)
 
     @classmethod
-    def get_meta(cls, key=None, default=None):
+    def get_meta_attribute(cls, key=None, default=None):
         if not key:
             return as_dict(cls.Schema)
         return getattr(cls.Schema, key, default)

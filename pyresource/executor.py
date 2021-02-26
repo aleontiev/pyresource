@@ -226,7 +226,7 @@ class Authorization:
     @classmethod
     def _can_take_field(cls, field, action, query=None, request=None):
         can = field.can
-        default = settings.DEFAULT_FIELD_CAN
+        default = settings.FIELD_CAN
         depends = field.depends
 
         if can is None:

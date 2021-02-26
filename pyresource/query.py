@@ -112,6 +112,9 @@ class Query(WhereQueryMixin):
     def data(self, data):
         return self._update({"data": data})
 
+    def parameters(self, args=None, copy=True, **kwargs):
+        return self._update({"parameters": kwargs}, merge=True, copy=copy)
+
     def record(self, name):
         return self._update({"record": name})
 

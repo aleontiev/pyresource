@@ -152,6 +152,7 @@ class ServerSchema:
     id = "server"
     source = None
     name = "server"
+    source = None
     singleton = True
     space = "."
     description = "server description"
@@ -163,6 +164,7 @@ class ServerSchema:
             "inverse": "server",
             "default": [],
         },
+        "source": {"type": ["null", "string", "object"]},
         "can": can,
         "features": {
             "type": {

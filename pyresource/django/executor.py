@@ -22,6 +22,7 @@ from pyresource.utils import resource_to_django, make_literal
 from .operators import make_expression, make_filter
 # use a single resolver across all executors
 from .resolver import resolver
+from .utils import maybe_atomic
 from pyresource.conf import settings
 
 
@@ -538,6 +539,8 @@ class DjangoExecutor(Executor, DjangoQueryLogic):
         if not self._can(resource, "add.resource", query, request):
             raise Forbidden()
 
+        parameters = query.get('parameters', {})
+        atomic = parameters.get('atomic', settings.ATOMIC)
         source = resource.source
         model = resolver.get_model(source)
 
@@ -550,99 +553,126 @@ class DjangoExecutor(Executor, DjangoQueryLogic):
             data = [data]
             as_list = False
 
-        # build up instances
-        # TODO: support partial success on lists
-        instances = []
-        for i, dat in enumerate(data):
-            index = f'.{i}' if as_list else ''
-            instance = model()
-            for field in fields:
-                # 1. get value for field
-                if field.name in dat:
-                    # use given value
-                    value = dat[field.name]
-                else:
-                    if field.default is not None:
-                        # use default value
-                        value = field.default
-                    elif field.is_nullable:
-                        # use null
-                        value = None
+        errors = {}
+        with maybe_atomic(atomic):
+            # build up instances
+            instances = []
+            for i, dat in enumerate(data):
+                index = f'.{i}' if as_list else ''
+                instance = model()
+                ok = True
+                for field in fields:
+                    # 1. get value for field
+                    if field.name in dat:
+                        # use given value
+                        value = dat[field.name]
                     else:
-                        raise BadRequest({
-                            f"data{index}": {
+                        if field.default is not None:
+                            # use default value
+                            value = field.default
+                        elif field.is_nullable:
+                            # use null
+                            value = None
+                        else:
+                            error = {
                                 field.name: ["This field is required and cannot be null"]
                             }
-                        })
+                            if atomic:
+                                raise BadRequest({f"data{index}": error})
+                            else:
+                                errors[f'data{index}'] = error
+                                ok = False
+                                break
 
-                # 2. validate value
-                try:
-                    field.validate(field.type, value)
-                except Exception as e:
-                    raise BadRequest(
-                        f"{value} is invalid for field "
-                        f"{field.id} with type {field.type}"
-                    )
+                    # TODO: support related adds when objects are passed instead of IDs
+                    # 2. validate value
+                    try:
+                        field.validate(field.type, value)
+                    except Exception as e:
+                        raise BadRequest(
+                            f"{value} is invalid for field "
+                            f"{field.id} with type {field.type}"
+                        )
 
-                source = resolver.get_field_source(field.source)
-                if not source:
-                    raise BadRequest({
-                        f"data{index}": {
+                    source = resolver.get_field_source(field.source)
+                    if not source:
+                        error = {
                             field.name: [
                                 f"Cannot set field through one-way source function: {source}"
                             ]
                         }
-                    })
+                        if atomic:
+                            raise BadRequest({f"data{index}": error})
+                        else:
+                            errors[f'data{index}'] = error
+                            ok = False
+                            break
 
-                if "." in source:
-                    raise BadRequest({
-                        f"data{index}": {
+                    if "." in source:
+                        error = {
                             field.name: [f'Cannot add through nested source "{source}"']
                         }
-                    })
+                        if atomic:
+                            raise BadRequest({f"data{index}": error})
+                        else:
+                            errors[f'data{index}'] = error
+                            ok = False
+                            break
 
-                if resolver.is_field_local(model, source):
-                    # this is a "local" field that lives on the model itself
-                    setattr(instance, source, value)
-                else:
-                    # this is a "remote" field that is local to another model
-                    # which means we cannot set the relationship until after creation
-                    if not hasattr(instance, "_add_after"):
-                        instance._add_after = {}
-                    instance._add_after[field.name] = (field, value)
+                    if resolver.is_field_local(model, source):
+                        # this is a "local" field that lives on the model itself
+                        setattr(instance, source, value)
+                    else:
+                        # this is a "remote" field that is local to another model
+                        # which means we cannot set the relationship until after creation
+                        if not hasattr(instance, "_add_after"):
+                            instance._add_after = {}
+                        instance._add_after[field.name] = (field, value)
+                if ok:
+                    instances.append(instance)
 
-        ids = []
-        # save instances and their new IDs
-        for i, instance in enumerate(instances):
-            index = f'.{i}' if as_list else ''
-            try:
-                instance.save()
-                if hasattr(instance, "_add_after"):
-                    for field, value in instance._add_after.values():
-                        source = resolver.get_field_source(field.source)
-                        # TODO: what if this isnt a many-related-manager?
-                        # is that possible for a remote field?
-                        getattr(instance, source).set(value)
-                    del instance._add_after
-                ids.append(instance.pk)
-            except Exception as e:
-                raise BadRequest({
-                    "data{index}": {
+
+            ids = []
+            # actually save the instances and their new IDs
+            for i, instance in enumerate(instances):
+                index = f'.{i}' if as_list else ''
+                try:
+                    # save local fields
+                    instance.save()
+                    # save remote fields (to-many relationships)
+                    if hasattr(instance, "_add_after"):
+                        for field, value in instance._add_after.values():
+                            source = resolver.get_field_source(field.source)
+                            # TODO: what if this isnt a many-related-manager?
+                            # is that possible for a remote field?
+                            getattr(instance, source).set(value)
+                        del instance._add_after
+                    ids.append(instance.pk)
+                except Exception as e:
+                    error = {
                         field.name: [f'Failed to save record: {e}']
                     }
-                })
+                    if atomic:
+                        raise BadRequest({f"data{index}": error})
+                    else:
+                        errors[f'data{index}'] = error
 
-        take = query.state.get("take", None)
-        if take:
-            # perform a get.record or get.resource to get the created records
-            query = query.action("get")
-            if as_list:
-                query = query.where({"in": [resource.id_name, make_literal(ids)]})
+            take = query.state.get("take", None)
+            if take:
+                # perform a get.record or get.resource to get the created records
+                query = query.action("get")
+                if as_list:
+                    query = query.where({"in": [resource.id_name, make_literal(ids)]})
+                else:
+                    query = query.record(ids[0])
+                result = query.get(request=request, **context)
+                return result
             else:
-                query = query.record(ids[0])
-            return query.get(request=request, **context)
-        else:
-            return True
+                # without take, return the number of rows modified
+                result = {'data': len(ids)}
+            if errors:
+                result['errors'] = errors
+            return result
 
     def add_field(self, query, request=None, **context):
         return

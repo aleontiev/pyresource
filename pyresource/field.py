@@ -112,10 +112,10 @@ class Field(Resource):
             (isinstance(space, Space) and space.name == '.')
         ):
             # get root space
-            parent_name = parent.get_meta('name')
+            parent_name = parent.get_meta_attribute('name')
             while parent_name == 'fields':
                 parent = parent.parent
-                parent_name = parent.get_meta('name')
+                parent_name = parent.get_meta_attribute('name')
 
             if parent_name == 'server':
                 space = parent.root

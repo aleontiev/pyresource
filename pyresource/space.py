@@ -78,15 +78,15 @@ class Space(Resource):
                     return space
             if name == 'resources':
                 if key == 'server':
-                    return self.server.as_record(space=self)
+                    return self.server.meta(space=self)
                 if key == 'spaces':
-                    return Space.as_record(space=self)
+                    return Space.meta(space=self)
                 if key == 'fields':
-                    return Field.as_record(space=self)
+                    return Field.meta(space=self)
                 if key == 'types':
-                    return Type.as_record(space=self)
+                    return Type.meta(space=self)
                 if key == 'resources':
-                    return Resource.as_record(space=self)
+                    return Resource.meta(space=self)
                 if '.' in key:
                     try:
                         space_id, resource_name = key.split('.')
