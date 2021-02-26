@@ -1,5 +1,21 @@
 from pyresource.exceptions import TypeValidationError
 
+types = [
+    "any",
+    "null",
+    "string",
+    "number",
+    "boolean",
+    "type",
+    "link",
+    "union",
+    "map",
+    "tuple",
+    "object",
+    "option",
+    "array"
+]
+
 
 def is_nullable(T):
     """Return true if T is a null type or list with none type"""

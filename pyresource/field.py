@@ -1,6 +1,7 @@
 from .utils import cached_property
 from .utils.types import is_list, get_link, validate, is_nullable
 from .resource import Resource
+from .conf import settings
 from .expression import execute
 from .schemas import FieldSchema
 from .exceptions import TypeValidationError
@@ -107,27 +108,27 @@ class Field(Resource):
         space = None
         parent = self.parent
         space = parent.get_option('space')
+        parent_name = parent.get_meta_attribute('name')
         if space and (
-            space == '.' or
-            (isinstance(space, Space) and space.name == '.')
+            space == settings.METASPACE_NAME or
+            (isinstance(space, Space) and space.name == settings.METASPACE_NAME)
         ):
             # get root space
-            parent_name = parent.get_meta_attribute('name')
             while parent_name == 'fields':
                 parent = parent.parent
                 parent_name = parent.get_meta_attribute('name')
 
             if parent_name == 'server':
-                space = parent.root
+                space = parent.metaspace
             elif parent_name == 'resources':
                 space = parent.get_option('space')
                 if not is_resolved(space):
                     space = parent.space
-                space = space.server.root
+                space = space.server.metaspace
             elif parent_name == 'spaces':
-                space = parent.server.root
+                space = parent.server.metaspace
             elif parent_name == 'types':
-                space = parent.server.root
+                space = parent.server.metaspace
         else:
             # get space from parent resource
             space = parent.space

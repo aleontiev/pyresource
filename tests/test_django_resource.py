@@ -6,6 +6,7 @@ from pyresource import __version__
 from pyresource.space import Space
 from pyresource.resource import Resource
 from pyresource.server import Server
+from pyresource.utils.types import types
 from pyresource.schemas import (
     SpaceSchema,
     ResourceSchema,
@@ -247,7 +248,7 @@ def get_server():
         source={"queryset": {"model": "tests.location", "sort": "created"}},
         fields="*",
     )
-    server.root  # noqa
+    server.setup()
     return server
 
 
@@ -323,16 +324,16 @@ class DjangoIntegrationTestCase(TestCase):
         id = users.get_field("id")
         self.assertEqual(id.resource, users)
 
-        root = server.root
+        metaspace = server.metaspace
         schemas = [
             SpaceSchema, ResourceSchema, TypeSchema, FieldSchema, ServerSchema
         ]
         self.assertEqual(
-            [resource.id for resource in root.resources],
+            [resource.id for resource in metaspace.resources],
             [s.id for s in schemas]
         )
         self.assertEqual(
-            [resource.fields_by_name.keys() for resource in root.resources],
+            [resource.fields_by_name.keys() for resource in metaspace.resources],
             [s.fields.keys() for s in schemas]
         )
 
@@ -424,7 +425,7 @@ class DjangoIntegrationTestCase(TestCase):
                     "inspect": True,
                     "action": True,
                 },
-                "types": [],
+                "types": types
             },
         )
 
@@ -1110,6 +1111,11 @@ class DjangoIntegrationTestCase(TestCase):
     # [ ] add
     # [ ] delete
     # [ ] set/edit
+    # [ ] meta executor (get/explain only, for metaspace queries)
+    # [ ] documentation
+
+    # post MVP
+    # [ ] custom Python methods
     # [ ] API executor (client)
     #   source:
     #       url: api.example.io/v0/users/
@@ -1123,8 +1129,3 @@ class DjangoIntegrationTestCase(TestCase):
     #           data:
     #               username:
     #               password:
-    # [ ] resource executor (get/explain only, for root space queries)
-    # [ ] documentation
-
-    # post MVP
-    # - custom properties

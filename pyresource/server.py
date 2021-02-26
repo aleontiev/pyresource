@@ -1,6 +1,8 @@
 from .utils import cached_property
 from .resource import Resource
+from .conf import settings
 from .schemas import ServerSchema
+from .utils.types import types
 from .executor import SpaceExecutor, ServerExecutor, get_executor_class
 
 
@@ -45,13 +47,17 @@ class Server(Resource):
             result[space.name] = space
         return result
 
+    @property
+    def space(self):
+        return self.metaspace
+
     @cached_property
-    def root(self):
+    def metaspace(self):
         from .space import Space
 
         return Space(
-            space=".",
-            name=".",
+            space=settings.METASPACE_NAME,
+            name=settings.METASPACE_NAME,
             server=self,
             resources=[
                 "spaces",
@@ -63,26 +69,12 @@ class Server(Resource):
         )
 
     def get_resource_by_id(self, id):
-        return self.root.resolve_record('resources', id)
+        return self.metaspace.resolve_record('resources', id)
 
     def setup(self):
         if not self._setup:
-            self.add("spaces", self.root)
-            self.add("types", [
-                "any",
-                "null",
-                "string",
-                "number",
-                "boolean",
-                "type",
-                "link",
-                "union",
-                "map",
-                "tuple",
-                "object",
-                "option",
-                "array",
-            ])
+            self.add("spaces", self.metaspace)
+            self.add("types", types)
         self._setup = True
 
     @cached_property

@@ -36,8 +36,10 @@ defaults = {
     # in a transaction or with transaction-like mechanics
     # (commit on success, rollback on failure)
     # if this is set to False, partial error responses may occur
-    'atomic': True
+    'atomic': True,
+    'metaspace_name': '.'
 }
+# singleton settings for pyresource (global context)
 settings = Settings(defaults)
 
 def configure(news, replace=False):

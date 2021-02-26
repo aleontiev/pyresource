@@ -1,6 +1,7 @@
 from collections import defaultdict
 from decimal import Decimal
 
+from .conf import settings
 from .resource import Resource
 from .utils import cached_property
 from .utils.types import get_link, get_type_name, get_type_names, get_type_property
@@ -13,8 +14,8 @@ class Space(Resource):
         pass
 
     def __init__(self, **kwargs):
-        if kwargs.get("space", None) == ".":
-            # root space record uniquely references itself
+        if kwargs.get("space", None) == settings.METASPACE_NAME:
+            # metaspace record uniquely references itself
             kwargs["space"] = self
         # records keyed by resource, for each of the resources in this space
         # for example, the root space (Space: .) will have records
@@ -46,7 +47,7 @@ class Space(Resource):
     @property
     def space(self):
         # return root space
-        return self.server.root
+        return self.server.metaspace
 
     def get_resource_for(self, source):
         resources = self.by_source[source]
@@ -65,7 +66,7 @@ class Space(Resource):
         from .types import Type
         from .field import Field
 
-        if self.name == '.':
+        if self.name == settings.METASPACE_NAME:
             if name == 'server':
                 return self.server
             if name == 'spaces':
@@ -78,15 +79,15 @@ class Space(Resource):
                     return space
             if name == 'resources':
                 if key == 'server':
-                    return self.server.meta(space=self)
+                    return self.server.metaresource(space=self)
                 if key == 'spaces':
-                    return Space.meta(space=self)
+                    return Space.metaresource(space=self)
                 if key == 'fields':
-                    return Field.meta(space=self)
+                    return Field.metaresource(space=self)
                 if key == 'types':
-                    return Type.meta(space=self)
+                    return Type.metaresource(space=self)
                 if key == 'resources':
-                    return Resource.meta(space=self)
+                    return Resource.metaresource(space=self)
                 if '.' in key:
                     try:
                         space_id, resource_name = key.split('.')

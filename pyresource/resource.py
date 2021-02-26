@@ -37,7 +37,7 @@ class Resource(object):
 
         if self.get_meta_attribute('id') == 'resources':
             space = self.get_option('space')
-            if space.name != '.':
+            if space.name != settings.METASPACE_NAME:
                 # normal resources trigger a binding with their space
                 # on initialization, do this by calling self.space
                 assert self.space is not None
@@ -203,7 +203,7 @@ class Resource(object):
         return self._fields[key]
 
     @classmethod
-    def meta(cls, **kwargs):
+    def metaresource(cls, **kwargs):
         id = cls.get_meta_attribute("id")
         fields = cls.get_attributes()
         options = cls.get_meta_attribute()
