@@ -1,8 +1,9 @@
 try:
-    from django.db.models import Prefetch, F, Value
+    from django.db.models import Prefetch, F, Value, OuterRef, Subquery
 except ImportError:
     raise Exception('django must be installed')
 
+import copy
 from pyresource.executor import Executor
 from pyresource.translator import ResourceTranslator
 from pyresource.resolver import RequestResolver
@@ -11,6 +12,7 @@ from pyresource.exceptions import (
     FilterError,
     ResourceMisconfigured,
     SerializationError,
+    SchemaResolverError,
     QueryValidationError,
     QueryExecutionError,
     NotFound,
@@ -136,7 +138,7 @@ class DjangoQueryLogic:
         if state is True:
             state = {}
 
-        record_id = state.get("record", None)
+        record_id = state.get("id", None)
         where = state.get("where", None)
         if where:
             request_filters = cls._get_filters(
@@ -222,7 +224,8 @@ class DjangoQueryLogic:
                         query,
                         request=request,
                         level=related_level,
-                        can=related_can
+                        can=related_can,
+                        related=related
                     )
                     prefetches.append(
                         Prefetch(
@@ -239,8 +242,8 @@ class DjangoQueryLogic:
         cls, resource, fields, queryset, query, count=None, level=None, **context,
     ):
         """Add pagination"""
-        if level is not None:
-            # TODO: also paginate nested querysets
+        if isinstance(queryset, dict):
+            # .aggregate was called, producing a dictionary result
             return queryset
 
         state = cls._get_query_state(query, level=level)
@@ -250,6 +253,18 @@ class DjangoQueryLogic:
         size = int(page.get("size", settings.PAGE_SIZE))
         after = page.get("after", None)
         offset = 0
+        if level is not None:
+            return queryset  # TODO
+            # nested pagination
+            # this is challenging because in Django you can't do 
+            # A.objects.prefetech_related(Prefetch('foos', queryset=Foo.objects.filter(x=1).annotate(...)[:5]))
+            # ...but you can instead do:
+            # A.objects.prefetch_related(Prefetch('foos', queryset=Foo.objects.annotate(...).filter(
+            #       pk__in=Subquery(
+            #           Foo.objects.filter(x=1, a_id=OuterRef('a_id')).values_list('pk', flat=True)[:5]
+            #       )
+            # )))
+            queryset = queryset.filter(**{backref: OuterRef(backref)})
         if after:
             try:
                 after = cls._decode_cursor(after)
@@ -270,10 +285,20 @@ class DjangoQueryLogic:
             else:
                 raise QueryValidationError("page:after is invalid: {after}")
 
+
         if count is not None:
             count["total"] = queryset.count()
         queryset = queryset[: size + 1]
+
+        if level is not None:
+            queryset = cls._get_queryset_base(resource, **context).filter(
+                id__in=Subquery(queryset)
+            )
         return queryset
+
+    @classmethod
+    def _make_aggregation(cls, aggregation):
+        return make_expression(aggregation)
 
     @classmethod
     def _make_annotation(cls, field, **context):
@@ -312,6 +337,9 @@ class DjangoQueryLogic:
         are annotated with a prefix of "." in order to prevent
         naming conflicts between source and resourced fields
         """
+        if isinstance(queryset, dict):
+            return queryset
+
         annotations = {}
         state = cls._get_query_state(query, level=level)
         if state is True:
@@ -345,6 +373,10 @@ class DjangoQueryLogic:
         cls, resource, fields, queryset, query, **context,
     ):
         """Add .distinct if the query has left/outer joins"""
+        if isinstance(queryset, dict):
+            # .aggregate was called, producing a dictionary result
+            return queryset
+
         has_joins = False
         for join in queryset.query.alias_map.values():
             if join.join_type and join.join_type != "INNER JOIN":
@@ -355,17 +387,37 @@ class DjangoQueryLogic:
         return queryset
 
     @classmethod
+    def _add_queryset_aggregations(
+        cls, resource, fields, queryset, query, **context,
+    ):
+        level = context.get('level', None)
+        state = cls._get_query_state(query, level=level)
+        if state is True:
+            return queryset
+
+        group = state.get('group')
+        if not group:
+            return queryset
+
+        aggregations = {}
+        for name, aggregation in group.items():
+            aggregations[name] = cls._make_aggregation(aggregation)
+
+        return query.aggregate(**aggregations)
+
+    @classmethod
     def _get_queryset(
         cls, resource, fields, query, **context,
     ):
         queryset = cls._get_queryset_base(resource, **context)
         for add in (
             "prefetches",
-            "fields",
             "filters",
             "sorts",
+            "aggregations",
             "distinct",
             "pagination",
+            "fields",
         ):
             queryset = getattr(cls, f"_add_queryset_{add}")(
                 resource, fields, queryset, query, **context,
@@ -379,8 +431,8 @@ class DjangoQueryLogic:
             and isinstance(related.source, dict)
             and "queryset" in related.source
         ):
-            source = related.source
-            source["queryset"]["model"] = resource.source
+            source = copy.deepcopy(related.source)
+            source["queryset"]["model"] = resolver.get_model_source(resource.source)
         else:
             source = resource.source
         return source
@@ -659,12 +711,12 @@ class DjangoExecutor(Executor, DjangoQueryLogic):
 
             take = query.state.get("take", None)
             if take:
-                # perform a get.record or get.resource to get the created records
+                # perform a get to return the created records
                 query = query.action("get")
                 if as_list:
                     query = query.where({"in": [resource.id_name, make_literal(ids)]})
                 else:
-                    query = query.record(ids[0])
+                    query = query.id(ids[0])
                 result = query.get(request=request, **context)
                 return result
             else:

@@ -318,7 +318,7 @@ class DjangoIntegrationTestCase(TestCase):
 
         query5 = tests.query("/users/1/groups" "?take=id,name")
         query6 = (
-            tests.query.resource("users").record("1").field("groups").take("id", "name")
+            tests.query.resource("users").id("1").field("groups").take("id", "name")
         )
         self.assertEqual(query5.state, query6.state)
         id = users.get_field("id")

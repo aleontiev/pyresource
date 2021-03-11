@@ -35,26 +35,26 @@ class Query(WhereQueryMixin):
     def __call__(self, *args, **kwargs):
         return self.from_querystring(*args, server=self.server, state=self.state)
 
-    def add(self, record=None, field=None, **context):
-        return self._call("add", record=record, field=field, **context)
+    def add(self, id=None, field=None, **context):
+        return self._call("add", id=id, field=field, **context)
 
-    def set(self, record=None, field=None, **context):
-        return self._call("set", record=record, field=field, **context)
+    def set(self, id=None, field=None, **context):
+        return self._call("set", id=id, field=field, **context)
 
-    def get(self, record=None, field=None, **context):
-        return self._call("get", record=record, field=field, **context)
+    def get(self, id=None, field=None, **context):
+        return self._call("get", id=id, field=field, **context)
 
-    def edit(self, record=None, field=None, **context):
-        return self._call("edit", record=record, field=field, **context)
+    def edit(self, id=None, field=None, **context):
+        return self._call("edit", id=id, field=field, **context)
 
-    def delete(self, record=None, field=None, **context):
-        return self._call("delete", record=record, field=field, **context)
+    def delete(self, id=None, field=None, **context):
+        return self._call("delete", id=id, field=field, **context)
 
-    def options(self, record=None, field=None, **context):
-        return self._call("options", record=record, field=field, **context)
+    def options(self, id=None, field=None, **context):
+        return self._call("options", id=id, field=field, **context)
 
-    def explain(self, record=None, field=None, **context):
-        return self._call("explain", record=record, field=field, **context)
+    def explain(self, id=None, field=None, **context):
+        return self._call("explain", id=id, field=field, **context)
 
     @cached_property
     def executor(self):
@@ -115,8 +115,8 @@ class Query(WhereQueryMixin):
     def parameters(self, args=None, copy=True, **kwargs):
         return self._update({"parameters": kwargs}, merge=True, copy=copy)
 
-    def record(self, name):
-        return self._update({"record": name})
+    def id(self, name):
+        return self._update({"id": name})
 
     def field(self, name):
         return self._update({"field": name})
@@ -179,17 +179,17 @@ class Query(WhereQueryMixin):
             kwargs[arg] = show
         return self._update({"take": kwargs}, copy=copy, level=level, merge=True)
 
-    def _call(self, action, record=None, field=None, **context):
+    def _call(self, action, id=None, field=None, **context):
         if self.state.get("action") != action:
             return getattr(self.action(action), action)(
-                record=record, field=field, **context
+                id=id, field=field, **context
             )
 
-        if record or field:
+        if id or field:
             # redirect back through copy
             args = {}
-            if record:
-                args["record"] = record
+            if id:
+                args["id"] = id
             if field:
                 args["field"] = field
             return getattr(self._update(args), action)(**context)
@@ -314,7 +314,7 @@ class Query(WhereQueryMixin):
             type = "space"
 
         remainder = None
-        space = resource = field = record = None
+        space = resource = field = id = None
         parts = querystring.split("?")
         if len(parts) <= 2:
             resource_parts = parts[0]
@@ -330,23 +330,23 @@ class Query(WhereQueryMixin):
                 else:
                     field = resource_parts[0]
             elif len_resource == 2:
-                # either resource/record or space/resource or record/field
+                # either resource/id or space/resource or id/field
                 if type == "server":
                     space, resource = resource_parts
                 elif type == "space":
-                    resource, record = resource_parts
+                    resource, id = resource_parts
                 else:
-                    record, field = resource_parts
+                    id, field = resource_parts
             elif len_resource == 3:
                 if type == "space":
-                    resource, record, field = resource_parts
+                    resource, id, field = resource_parts
                 elif type == "server":
-                    space, resource, record = resource_parts
+                    space, resource, id = resource_parts
                 else:
                     raise ValueError(f"Invalid querystring: {querystring}")
             elif len_resource == 4:
                 if type == "server":
-                    space, resource, record, field = resource_parts
+                    space, resource, id, field = resource_parts
                 else:
                     raise ValueError(f"Invalid querystring: {querystring}")
             elif len_resource > 5:
@@ -356,8 +356,8 @@ class Query(WhereQueryMixin):
                 update["space"] = space
             if resource is not None:
                 update["resource"] = resource
-            if record is not None:
-                update["record"] = record
+            if id is not None:
+                update["id"] = id
             if field is not None:
                 update["field"] = field
             if update:

@@ -1,5 +1,5 @@
 import decimal
-from django.db.models import Q, F, Value, Count
+from django.db.models import Q, F, Value, Count, Min, Max, Avg
 from django.db.models.functions import (
     Now,
     Concat,
@@ -219,6 +219,7 @@ trim = make_expression_operator(Trim, num_args=1)
 ltrim = make_expression_operator(LTrim, num_args=1)
 rtrim = make_expression_operator(RTrim, num_args=1)
 count = make_expression_operator(Count, num_args=1)
+count_distinct = make_expression_operator(Count, num_args=1, distinct=True)
 lower = make_expression_operator(Lower, num_args=1)
 upper = make_expression_operator(Upper, num_args=1)
 length = make_expression_operator(Length, num_args=1)
@@ -232,14 +233,23 @@ if MD5:
     sha256 = make_expression_operator(SHA256, num_args=1)
     sha512 = make_expression_operator(SHA512, num_args=1)
 
+max_ = make_expression_operator(Max, num_args=1)
+min_ = make_expression_operator(Min, num_args=1)
+avg = make_expression_operator(Avg, num_args=1)
 
 expression_operators = {
+    # aggregations
+    'max': max_,
+    'min': min_,
+    'avg': avg,
+    'average': avg,
+    'count': count,
+    'count.distinct': count_distinct,
     # logic
     'now': now,
     'coalesce': coalesce,
     'least': least,
     'greatest': greatest,
-    'count': count,
     'nullif': nullif,
     # math
     'pi': pi,

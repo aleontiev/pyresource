@@ -8,7 +8,7 @@ SORT = 'sort'
 GROUP = 'group'
 WHERE = 'where'
 FIELD = 'field'
-RECORD = 'record'
+ID = 'id'
 DATA = 'data'
 SPACE = 'space'
 RESOURCE = 'resource'
@@ -26,7 +26,7 @@ ROOT_FEATURES = {
     INSPECT,
     ACTION,
     FIELD,
-    RECORD,
+    ID,
     DATA,
     SPACE,
     RESOURCE,

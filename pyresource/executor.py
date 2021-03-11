@@ -68,7 +68,6 @@ class Selection:
             action: action string (ex: "get")
             level: level string (ex: "a.b")
             query: a Query
-            record: a Django model instance
             request: a Django Request object
         """
         result = []
@@ -486,7 +485,7 @@ class Dispatch:
         endpoint = None
         if state.get("field"):
             endpoint = "field"
-        elif state.get("record"):
+        elif state.get("id"):
             endpoint = "record"
         elif state.get("resource"):
             endpoint = "resource"
@@ -497,15 +496,20 @@ class Dispatch:
 
         action_name = f"{name}_{endpoint}"
         action = getattr(self, action_name, None)
-        if context.get("response"):
+        response = context.get("response")
+        if response:
+            if isinstance(response, bool):
+                response_cls = Response
+            else:
+                response_cls = response
             # return as a response
             success = {"add": 201, "delete": 204}.get(name, 200)
             try:
-                return Response(action(query, **context), code=success)
+                return response_cls(action(query, **context), status=success)
             except RequestError as e:
-                return Response(str(e), code=e.code)
+                return response_cls(str(e), status=e.code)
             except Exception as e:
-                return Response(str(e), code=500)
+                return response_cls(str(e), status=500)
         else:
             return action(query, **context)
 

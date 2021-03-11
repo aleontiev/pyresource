@@ -172,15 +172,18 @@ class DjangoSchemaResolver(SchemaResolver):
         if not source:
             raise SchemaResolverError('Invalid source (empty)')
 
-        source = self.get_model_source(source)
+        src = self.get_model_source(source)
         models = self._models
-        if source not in models:
+        if not isinstance(src, str):
+            import pdb
+            pdb.set_trace()
+        if src not in models:
             # resolve model at this time if provided, throwing an error
             # if it does not exist or if Django is not imported
             from django.apps import apps
 
             try:
-                app_label, model_name = source.split(".")
+                app_label, model_name = src.split(".")
             except Exception:
                 raise SchemaResolverError(f'Invalid source (too many dots): {source}')
 
@@ -191,7 +194,7 @@ class DjangoSchemaResolver(SchemaResolver):
                     f'Invalid source (not a registered model): {source}\n'
                     f'Error: {e}'
                 )
-        return models[source]
+        return models[src]
 
 
 resolver = DjangoSchemaResolver()
