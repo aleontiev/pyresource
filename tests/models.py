@@ -1,7 +1,7 @@
 from datetime import datetime
 import uuid
 from django.db import models
-from django.contrib.auth.models import AbstractBaseUser
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 from django.db.models.fields import NOT_PROVIDED
 from django.contrib.postgres import fields as postgres
 
@@ -116,7 +116,7 @@ class Membership(MakeMixin, models.Model):
 
 class User(MakeMixin, AbstractBaseUser):
     USERNAME_FIELD = 'email'
-
+    objects = BaseUserManager()
     id = models.UUIDField(primary_key=True)
     first_name = models.TextField(null=True)
     family_name = models.TextField(null=True)
@@ -124,6 +124,7 @@ class User(MakeMixin, AbstractBaseUser):
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
     is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
     location = models.ForeignKey(
         Location,

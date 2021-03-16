@@ -15,6 +15,7 @@ from pyresource.schemas import (
     TypeSchema
 )
 from tests.models import User, Group, Location
+from .server import get_server
 from .utils import Request, Fixture
 
 # basic features:
@@ -32,7 +33,9 @@ from .utils import Request, Fixture
 
 
 def get_fixture():
-    userA = User.make(family_name="A", first_name="Alex", is_superuser=True)
+    userA = User.make(family_name="A", first_name="Alex", is_superuser=True, is_staff=True)
+    userA.set_password(userA.email)
+    userA.save()
     userB = User.make(family_name="B", first_name="Bay")
     userC = User.make(is_active=False, first_name="Inactive", family_name="I")
     groupA = Group.make(name="A")
@@ -43,7 +46,6 @@ def get_fixture():
     return Fixture(users=[userA, userB, userC], groups=[groupA, groupB, groupC])
 
 
-server = None
 client = None
 
 
@@ -65,192 +67,6 @@ def get_client():
     })
     tests = client.spaces_by_name['tests']
     users = tests.resources_by_name['users']
-
-def get_server():
-    global server
-    if server is not None:
-        # cache the server spec since it doesn't change
-        # across test cases
-        return server
-
-    # social network integration setup
-    # one space: test
-    # three collections:
-    # - users
-    # - groups
-    # - location
-    # one singleton:
-    # - session (for authentication)
-    server = Server(url="http://localhost/api/",)
-
-    tests = Space(name="tests", server=server)
-
-    def login(resource, request, query):
-        api_key = query.state("body").get("api_key")
-        api_key = json.loads(str(base64.b64decode(api_key)))
-        if authenticate(username, password):
-            pass
-
-    def logout(resource, request, query):
-        pass
-
-    def change_password(resource, request, query):
-        pass
-
-    session = Resource(
-        id="tests.session",
-        name="session",
-        space=tests,
-        singleton=True,
-        can={
-            "login.resource": True,
-            "logout.resource": True,
-            "get": True,
-            "explain": True
-        },
-        fields={
-            "user": {
-                "type": ["null", "@users"],
-                "source": ".request.user"
-            }
-        },
-        actions={
-            "login": {
-                "method": login,
-                "fields": {
-                    "username": {
-                        "type": "string",
-                        "can": {"get": False}
-                    },
-                    "password": {
-                        "type": "string",
-                        "can": {"get": False}
-                    },
-                    "status": {
-                        "type": "string",
-                        "can": {"set": False}
-                    },
-                },
-            },
-            "logout": logout,
-        },
-    )
-    groups = Resource(
-        id="tests.groups",
-        name="groups",
-        source={
-            "queryset": {
-                "model": "tests.group",
-                "where": "is_active"
-            }
-        },
-        space=tests,
-        fields={
-            "id": "id",
-            "name": "name",
-            "users": {
-                "source": {"queryset": {"field": "users", "sort": "created"}},
-                "lazy": True,
-                "can": {"set": False},
-            },
-            "created": {"lazy": True, "can": {"set": False}},
-            "updated": {"lazy": True, "can": {"set": False}},
-        },
-        can={
-            "*": ".request.user.is_superuser",
-            "get": {"=": ["users", ".request.user.id"]},
-        },
-    )
-
-    users = Resource(
-        id="tests.users",
-        name="users",
-        source={
-            "queryset": {
-                "model": "tests.user",
-                "where": "is_active",
-                "sort": "created",
-            }
-        },
-        space=tests,
-        fields={
-            "id": "id",
-            "first_name": "first_name",
-            "last_name": "family_name",  # renamed field
-            "name": {
-                "type": "string",
-                "source": {"concat": ["first_name", '" "', "family_name"],},
-                "can": {"set": False},
-            },
-            "email": "email",
-            "num_groups": {
-                "source": {
-                    "count": "groups"
-                },
-                "type": "number",
-                "lazy": True,
-                "can": {"set": False}
-            },
-            "groups": {
-                "lazy": True,
-                "can": {
-                    "set": {"=": [".query.action", '"add"']},
-                    # can only set if the new value is smaller {'>': ['.changes.groups', 'groups']}
-                    # can only set if name is not changing {'null': '.changes.name'}
-                    "add": True,
-                    "prefetch": True,
-                },
-                "source": {
-                    "queryset": {
-                        "field": "groups",
-                        "sort": "name",
-                        "where": "is_active"
-                    }
-                },
-            },
-            "is_superuser": {
-                "depends": {
-                    "or": [
-                        ".request.user.is_superuser",
-                        ".request.user.is_staff"
-                    ]
-                }
-            },
-            "created": {"lazy": True, "default": {"now": {}}, "can": {"set": False}},
-            "updated": {"lazy": True, "default": {"now": {}}, "can": {"set": False}},
-        },
-        can={
-            "*": ".request.user.is_superuser",
-            "get, change-password": {"=": ["id", ".request.user.id"]},
-        },
-        before={
-            "change-password": {"check": {"=": ["confirm_password", "new_password"]}}
-        },
-        actions={
-            "change-password": {
-                "method": change_password,
-                "fields": {
-                    "old_password": {"type": "string", "can": {"get": False}},
-                    "new_password": {
-                        "type": {"type": "string", "min_length": 10,},
-                        "can": {"get": False},
-                    },
-                    "confirm_password": {"type": "string", "can": {"get": False}},
-                    "changed": {"type": "boolean", "can": {"set": False}},
-                },
-            }
-        },
-    )
-    location = Resource(
-        id="tests.users",
-        name="users",
-        space=tests,
-        source={"queryset": {"model": "tests.location", "sort": "created"}},
-        fields="*",
-    )
-    server.setup()
-    return server
-
 
 class DjangoIntegrationTestCase(TestCase):
     maxDiff = None
@@ -1104,6 +920,55 @@ class DjangoIntegrationTestCase(TestCase):
         num_groups_value = users.query(f'{userA.id}/num_groups').get(request=request)
         self.assertEqual(num_groups_value, {'data': userA.groups.count()})
 
+    def test_django_dispatch(self):
+        server = get_server()
+        fixture = get_fixture()
+        userA, userB, userC = fixture.users
+        self.client.login(username=userA.email, password=userA.email)
+        # server endpoint
+        response = self.client.get('/api/')
+        content = json.loads(response.content)
+        self.assertEquals(content, {'data': {'tests': './tests/', '.': '././'}})
+
+        # space endpoint
+        response = self.client.get('/api/tests/')
+        content = json.loads(response.content)
+        self.assertEquals(content, {'data': {'groups': './groups/', 'session': './session/', 'users': './users/'}})
+
+        # resource endpoint
+        response = self.client.get('/api/tests/users/')
+        content = json.loads(response.content)
+        self.assertEquals(
+            content,
+            {
+                "data": [
+                    {
+                        "id": str(userA.id),
+                        "email": userA.email,
+                        "is_superuser": True,
+                        "first_name": userA.first_name,
+                        "last_name": userA.family_name,
+                        "name": f"{userA.first_name} {userA.family_name}",
+                    },
+                    {
+                        "id": str(userB.id),
+                        "is_superuser": False,
+                        "email": userB.email,
+                        "first_name": userB.first_name,
+                        "last_name": userB.family_name,
+                        "name": f"{userB.first_name} {userB.family_name}",
+                    },
+                ]
+            }
+        )
+        response = self.client.get(f'/api/tests/users/{userA.id}/email/')
+        content = json.loads(response.content)
+        self.assertEquals(
+            content,
+            {
+                "data": userA.email
+            }
+        )
     # MVP TODOs:
     # [x] use prefetch for many-related fields instead of ArrayAgg (bugged) 
     # [ ] group (aggregation)

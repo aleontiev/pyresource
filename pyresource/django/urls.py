@@ -15,17 +15,13 @@ methods_to_actions = {
 
 def make_dispatch(server, base):
     def dispatch(request, **kwargs):
-        # dispatch request to server
+        """Dispatch a Django/WSGI request to a pyresource.Server"""
         querystring = request.GET.urlencode()
         method = request.method
         path = request.path
         # normalize starting slash
-        if url[0] == '/':
-            if path[0] != '/':
-                path = f'/{path}'
-        else:
-            if path[0] == '/':
-                path = path[1:]
+        if path[0] == '/':
+            path = path[1:]
 
         if not path.startswith(base):
             raise Exception(
@@ -44,12 +40,14 @@ def make_dispatch(server, base):
                     f'unsupported method {method}'
                 )
             query = query.action(action)
-        return query.execute(response=JsonResponse)
+        response = query.execute(response=JsonResponse, request=request)
+        return response
     return dispatch
 
 
 dispatches = {}
 def get_dispatch_for(server, base):
+    """Get dispatch method for a server"""
     url = server.url
     global dispatches
     if url not in dispatches:
@@ -60,7 +58,8 @@ def get_dispatch_for(server, base):
 def get_urlpatterns(server):
     """Get Django-compatible urlpatterns from a server"""
     base = urlparse(server.url).path
+    if base[0] == '/':
+        base = base[1:]
     dispatch = get_dispatch_for(server, base)
-    return [
-        re_path(rf'^{base}.*$', dispatch)
-    ]
+    regex = rf'^{base}.*$'
+    return [re_path(regex, dispatch)]

@@ -225,7 +225,8 @@ class DjangoQueryLogic:
                         request=request,
                         level=related_level,
                         can=related_can,
-                        related=related
+                        related=related,
+                        related_field=field
                     )
                     prefetches.append(
                         Prefetch(
@@ -264,7 +265,9 @@ class DjangoQueryLogic:
             #           Foo.objects.filter(x=1, a_id=OuterRef('a_id')).values_list('pk', flat=True)[:5]
             #       )
             # )))
-            queryset = queryset.filter(**{backref: OuterRef(backref)})
+            queryset = queryset.filter(
+                **{backref: OuterRef(backref)}
+            ).values_list('pk', flat=True)
         if after:
             try:
                 after = cls._decode_cursor(after)

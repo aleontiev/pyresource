@@ -122,7 +122,7 @@ This guide walks through each step in creating a small set of resource APIs, ass
 
 ``` python
     from django.conf import settings
-    from pyresource.server import Server
+    from pyresource import Server
 
     server = Server(url=f'{settings.BASE_URL}/api')
 ```
@@ -162,7 +162,7 @@ Create space "v0":
 - Create `app/resources/spaces/v0/space.py`:
 
 ``` python
-    from pyresource.space import Space
+    from pyresource import Space
     from app.resources.server import server
 
     v0 = Space(name='v0', server=server)
@@ -176,7 +176,7 @@ Create space "v0":
 - Create `app/resources/spaces/v1/space.py`:
 
 ``` python
-    from pyresource.space import Space
+    from pyresource import Space
     from app.resources.server import server
 
     v1 = Space(name='v1', server=server)
@@ -191,7 +191,7 @@ Create space "v0":
 - Create `app/resources/spaces/v0/resources/clients.py`:
 
 ``` python
-    from pyresource.resource import Resource
+    from pyresource import Resource
     from app.spaces.v0.space import v0
 
     clients = Resource(
@@ -210,8 +210,7 @@ Create space "v0":
 - Create `app/resources/spaces/v1/resources/users.py`:
 
 ``` python
-    from pyresource.resource import Resource
-    from pyresource.types import Types
+    from pyresource import Resource
     from app.spaces.v1.space import v1
 
     users = Resource(
@@ -296,7 +295,7 @@ Create resource "groups" in space "v1"
 Create `app/spaces/v1/resources/groups.py`:
 
 ``` python
-    from pyresource.resource import Resource
+    from pyresource import Resource
 
     groups = Resource(
         name='auth.Group',
