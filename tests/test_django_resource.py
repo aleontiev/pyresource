@@ -68,6 +68,7 @@ def get_client():
     tests = client.spaces_by_name['tests']
     users = tests.resources_by_name['users']
 
+
 class DjangoIntegrationTestCase(TestCase):
     maxDiff = None
 
