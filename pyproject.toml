@@ -9,6 +9,7 @@ authors = ["Anthony Leontiev <ant@devlit.co>"]
 [tool.poetry.dependencies]
 python = "^3.7"
 ttable = "^0.6.3"
+django-cte = {git = "https://github.com/aleontiev/django-cte", rev = "feature/get-manager"}
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.4"

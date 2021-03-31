@@ -24,7 +24,7 @@ from pyresource.utils import resource_to_django, make_literal
 from .operators import make_expression, make_filter
 # use a single resolver across all executors
 from .resolver import resolver
-from .utils import maybe_atomic
+from .utils import maybe_atomic, maybe_capture_queries
 from pyresource.conf import settings
 
 
@@ -200,11 +200,11 @@ class DjangoQueryLogic:
                     # recursively build nested querysets
                     source = resolver.get_field_source(field.source)
                     source = resource_to_django(source)
-                    related = field.related
+                    related_resource = field.related
                     related_level = f"{level}.{field.name}" if level else field.name
                     # selection: which fields should be selected
                     related_fields = cls._take_fields(
-                        related,
+                        related_resource,
                         action="get",
                         query=query,
                         request=request,
@@ -212,21 +212,20 @@ class DjangoQueryLogic:
                     )
                     # authorization: is the request allowed to prefetch this relation
                     related_can = cls._can(
-                        related,
+                        related_resource,
                         'get.prefetch',
                         query=query,
                         request=request,
                         field=field
                     )
                     next_queryset = cls._get_queryset(
-                        related,
+                        related_resource,
                         related_fields,
                         query,
                         request=request,
                         level=related_level,
                         can=related_can,
-                        related=related,
-                        related_field=field
+                        related=field
                     )
                     prefetches.append(
                         Prefetch(
@@ -237,6 +236,22 @@ class DjangoQueryLogic:
         if prefetches:
             queryset = queryset.prefetch_related(*prefetches)
         return queryset
+
+    @classmethod
+    def _get_backref(
+        cls,
+        field
+    ):
+        resource = field.resource
+        source = resolver.get_field_source(field.source)
+        if '.' in source:
+            raise ValueError(
+                f'nested pagination is not supported over relationships '
+                f'with a nested source ({source})'
+            )
+        model = resolver.get_model(resource.source)
+        model_field = model._meta.get_field(source)
+        return model_field.remote_field.name
 
     @classmethod
     def _add_queryset_pagination(
@@ -256,18 +271,7 @@ class DjangoQueryLogic:
         offset = 0
         if level is not None:
             return queryset  # TODO
-            # nested pagination
-            # this is challenging because in Django you can't do 
-            # A.objects.prefetech_related(Prefetch('foos', queryset=Foo.objects.filter(x=1).annotate(...)[:5]))
-            # ...but you can instead do:
-            # A.objects.prefetch_related(Prefetch('foos', queryset=Foo.objects.annotate(...).filter(
-            #       pk__in=Subquery(
-            #           Foo.objects.filter(x=1, a_id=OuterRef('a_id')).values_list('pk', flat=True)[:5]
-            #       )
-            # )))
-            queryset = queryset.filter(
-                **{backref: OuterRef(backref)}
-            ).values_list('pk', flat=True)
+
         if after:
             try:
                 after = cls._decode_cursor(after)
@@ -292,11 +296,6 @@ class DjangoQueryLogic:
         if count is not None:
             count["total"] = queryset.count()
         queryset = queryset[: size + 1]
-
-        if level is not None:
-            queryset = cls._get_queryset_base(resource, **context).filter(
-                id__in=Subquery(queryset)
-            )
         return queryset
 
     @classmethod
@@ -380,11 +379,16 @@ class DjangoQueryLogic:
             # .aggregate was called, producing a dictionary result
             return queryset
 
+        if context.get('related'):
+            # handled separately
+            return queryset
+
         has_joins = False
         for join in queryset.query.alias_map.values():
-            if join.join_type and join.join_type != "INNER JOIN":
+            if join.join_type: # and join.join_type != "INNER JOIN":
                 has_joins = True
                 break
+
         if has_joins:
             queryset = queryset.distinct()
         return queryset
@@ -429,13 +433,37 @@ class DjangoQueryLogic:
 
     @classmethod
     def _get_queryset_source(self, resource, related=None):
-        if (
-            related
-            and isinstance(related.source, dict)
-            and "queryset" in related.source
-        ):
-            source = copy.deepcopy(related.source)
-            source["queryset"]["model"] = resolver.get_model_source(resource.source)
+        if related:
+            # add context from related field
+            related_source = related.source
+            if isinstance(related_source, dict) and "queryset" in related_source:
+                source = copy.deepcopy(resource.source) if isinstance(resource.source, dict) else {
+                    'queryset': {
+                        'model': resource.source
+                    }
+                }
+                queryset = source['queryset']
+                related_queryset = related_source['queryset']
+                # add "where" from related_source
+                if 'where' in related_queryset:
+                    if 'where' not in queryset:
+                        # use related queryset filter only
+                        queryset['where'] = related_queryset['where']
+                    elif queryset['where'] != related_queryset['where']:
+                        # use related queryset filter and resource filter
+                        queryset['where'] = {'and': [queryset['where'], related_queryset['where']]}
+                    # otherwise, keep the same filter (it is the same)
+
+                # add "sort" from related_source
+                if 'sort' in related_queryset:
+                    if 'sort' not in queryset:
+                        queryset['sort'] = related_queryset['sort']
+                    elif queryset['sort'] != related_queryset['sort']:
+                        # overwrite the default sort order instead of concatenating sorts
+                        # this is because a concatenated sort is rarely the intent
+                        queryset['sort'] = related_queryset['sort']
+            else:
+                source = resource.source
         else:
             source = resource.source
         return source
@@ -457,104 +485,108 @@ class DjangoQueryLogic:
 class DjangoExecutor(Executor, DjangoQueryLogic):
 
     def _get_resource(
-        self, endpoint, query, request=None, prefix=None, resource=None, **context
+        self, endpoint, query, request=None, prefix=None, resource=None, queries=None, **context
     ):
-        if resource is None:
-            server = query.server
-            resource = query.state.get('resource')
-            space = query.state.get('space')
-            resource = server.get_resource_by_id(f'{space}.{resource}')
+        do_capture = isinstance(queries, dict)
+        with maybe_capture_queries(capture=do_capture) as capture:
+            if resource is None:
+                server = query.server
+                resource = query.state.get('resource')
+                space = query.state.get('space')
+                resource = server.get_resource_by_id(f'{space}.{resource}')
 
-        can = self._can(resource, f"get.{endpoint}", query, request)
-        if not can:
-            raise Forbidden()
+            can = self._can(resource, f"get.{endpoint}", query, request)
+            if not can:
+                raise Forbidden()
 
-        source = resource.source
-        if endpoint == "resource":
-            page_size = int(
-                query.state.get("page", {}).get("size", settings.PAGE_SIZE)
-            )
-
-        meta = {}
-
-        fields = self._take_fields(
-            resource, action="get", query=query, request=request,
-        )
-
-        if not source:
-            # no source -> do not use queryset
-            if not resource.singleton:
-                raise ResourceMisconfigured(
-                    f'{resource.id}: cannot "get" a collection resource with no source'
+            source = resource.source
+            if endpoint == "resource":
+                page_size = int(
+                    query.state.get("page", {}).get("size", settings.PAGE_SIZE)
                 )
-            # singleton -> assume fields are all computed
-            # e.g. user_id with source: ".request.user.id"
-            data = self._serialize(
-                resource, fields, query=query, request=request, meta=meta
+
+            meta = {}
+
+            fields = self._take_fields(
+                resource, action="get", query=query, request=request,
             )
-        else:
-            if resource.singleton:
-                # get queryset and obtain first record
-                record = self._get_queryset(
-                    resource, fields, query, request=request, can=can, **context
-                ).first()
-                if not record:
+
+            if not source:
+                # no source -> do not use queryset
+                if not resource.singleton:
                     raise ResourceMisconfigured(
-                        f"{resource.id}: could not locate record for singleton resource"
+                        f'{resource.id}: cannot "get" a collection resource with no source'
                     )
+                # singleton -> assume fields are all computed
+                # e.g. user_id with source: ".request.user.id"
                 data = self._serialize(
-                    resource,
-                    fields,
-                    query=query,
-                    request=request,
-                    record=record,
-                    meta=meta,
+                    resource, fields, query=query, request=request, meta=meta
                 )
             else:
-                count = (
-                    {} if endpoint == "resource" and settings.PAGE_TOTAL else None
-                )
-                queryset = self._get_queryset(
-                    resource,
-                    fields,
-                    query,
-                    count=count,
-                    request=request,
-                    can=can,
-                    **context,
-                )
-                if endpoint == "resource":
-                    # many records
-                    records = list(queryset)
-                    num_records = len(records)
-                    if num_records and num_records > page_size:
-                        cursor = self._get_next_page(query)
-                        page_data = {"after": cursor}
-                        if count:
-                            page_data["total"] = count["total"]
-                        if "page" not in meta:
-                            meta["page"] = {}
-                        page_key = "data" if prefix is None else f"data.{prefix}"
-                        meta["page"][page_key] = page_data
-                        records = records[:page_size]
+                if resource.singleton:
+                    # get queryset and obtain first record
+                    record = self._get_queryset(
+                        resource, fields, query, request=request, can=can, **context
+                    ).first()
+                    if not record:
+                        raise ResourceMisconfigured(
+                            f"{resource.id}: could not locate record for singleton resource"
+                        )
+                    data = self._serialize(
+                        resource,
+                        fields,
+                        query=query,
+                        request=request,
+                        record=record,
+                        meta=meta,
+                    )
                 else:
-                    # one record only
-                    records = queryset.first()
-                    if not records:
-                        # no record
-                        raise NotFound()
-                data = self._serialize(
-                    resource,
-                    fields,
-                    record=records,
-                    query=query,
-                    request=request,
-                    meta=meta,
-                )
+                    count = (
+                        {} if endpoint == "resource" and settings.PAGE_TOTAL else None
+                    )
+                    queryset = self._get_queryset(
+                        resource,
+                        fields,
+                        query,
+                        count=count,
+                        request=request,
+                        can=can,
+                        **context,
+                    )
+                    if endpoint == "resource":
+                        # many records
+                        records = list(queryset)
+                        num_records = len(records)
+                        if num_records and num_records > page_size:
+                            cursor = self._get_next_page(query)
+                            page_data = {"after": cursor}
+                            if count:
+                                page_data["total"] = count["total"]
+                            if "page" not in meta:
+                                meta["page"] = {}
+                            page_key = "data" if prefix is None else f"data.{prefix}"
+                            meta["page"][page_key] = page_data
+                            records = records[:page_size]
+                    else:
+                        # one record only
+                        records = queryset.first()
+                        if not records:
+                            # no record
+                            raise NotFound()
+                    data = self._serialize(
+                        resource,
+                        fields,
+                        record=records,
+                        query=query,
+                        request=request,
+                        meta=meta,
+                    )
 
-        result = {"data": data}
-        if meta:
-            result["meta"] = meta
+            result = {"data": data}
+            if meta:
+                result["meta"] = meta
+        if queries is not None:
+            queries['queries'] = capture.queries
         return result
 
     def get_record(self, query, request=None, **context):
