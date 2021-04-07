@@ -155,6 +155,7 @@ def get_server():
             },
             "created": {"lazy": True, "default": {"now": {}}, "can": {"set": False}},
             "updated": {"lazy": True, "default": {"now": {}}, "can": {"set": False}},
+            "location": {"lazy": True}
         },
         can={
             "*": ".request.user.is_superuser",

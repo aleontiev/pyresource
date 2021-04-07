@@ -81,7 +81,7 @@ One complication to the above approach is that we may want to prefetch and also 
 
 This is difficult to express in SQL using the prefetch approach; we can't add a `LIMIT` onto the prefetch query, because that would limit the total number of groups instead of the number of groups per user:
 
-``` SQL
+``` sql
     SELECT groups.id, user_groups.user_id, groups.name
     FROM user_groups
     INNER JOIN groups ON user_groups.group_id = groups.id
@@ -97,7 +97,7 @@ Instead, we can use a combination of subqueries or CTEs and window functions:
 - The subquery allows us to filter on the window function by temporarily storing the window results (not normally allowed because it is a virtual field computed in a post-filtering step)
 
 
-``` SQL
+``` sql
 WITH T as (
     SELECT
         groups.id as id,
@@ -111,6 +111,35 @@ WITH T as (
 SELECT *
 FROM T
 WHERE T.row <= 3
+```
+
+To make queries like this, we can use the `django-cte` package (which will hopefully be added directly to Django 4+ as it supports these more advanced use-cases!)
+
+Using `django-cte` looks like this:
+
+```
+from django_cte import With, CTEManager
+
+def get_manager(self, model):
+    if not hasattr(model, 'cte_objects'):
+        manager = CTEManager()
+        manager.contribute_to_class(model, 'cte_objects')
+    return model.cte_objects
+
+With.get_manager = get_manager
+
+cte = With(
+    Group.objects.filter(users__in=[1, 2, 3]).annotate(
+        row_number=Window(
+            expression=RowNumber(),
+            partition_by=['users'],
+            order_by=['created']
+        )
+    )
+)
+queryset = cte.queryset().with_cte(cte).filter(
+    row_number__lte=3
+)
 ```
 
 

@@ -417,7 +417,6 @@ class DjangoIntegrationTestCase(TestCase):
         prefetch_groups = users.query("?take=*,-name&take.groups=*,users").get(
             request=request, queries=queries
         )
-        skip = """
         self.assertEqual(
             prefetch_groups,
             {
@@ -438,12 +437,11 @@ class DjangoIntegrationTestCase(TestCase):
                 ]
             },
         )
-        """
         prefetch_deep_query = users.query(
             "?take=*,-name&take.groups=*&take.groups.users=id,groups"
         )
         prefetch_deep = prefetch_deep_query.get(request=request)
-        skip = """self.assertEqual(
+        self.assertEqual(
             prefetch_deep,
             {
                 "data": [
@@ -466,7 +464,7 @@ class DjangoIntegrationTestCase(TestCase):
                     },
                 ]
             },
-        )"""
+        )
 
         ## filtering
 

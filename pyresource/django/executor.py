@@ -24,6 +24,7 @@ from pyresource.utils import resource_to_django, make_literal
 from .operators import make_expression, make_filter
 # use a single resolver across all executors
 from .resolver import resolver
+from .prefetch import FastQuery, FastPrefetch
 from .utils import maybe_atomic, maybe_capture_queries
 from pyresource.conf import settings
 
@@ -228,7 +229,7 @@ class DjangoQueryLogic:
                         related=field
                     )
                     prefetches.append(
-                        Prefetch(
+                        FastPrefetch(
                             source, queryset=next_queryset, to_attr=f".{field.name}"
                         )
                     )
@@ -270,7 +271,7 @@ class DjangoQueryLogic:
         after = page.get("after", None)
         offset = 0
         if level is not None:
-            return queryset  # TODO
+            pass # return queryset  # TODO
 
         if after:
             try:
@@ -368,7 +369,10 @@ class DjangoQueryLogic:
 
         if annotations:
             queryset = queryset.annotate(**annotations)
-        return queryset.only("pk")
+
+        only = list(annotations.keys())
+        only.append('pk')
+        return queryset.only(*only)
 
     @classmethod
     def _add_queryset_distinct(
@@ -479,7 +483,10 @@ class DjangoQueryLogic:
                 f'{resource.id}: failed to resolve model from source "{source}"\n'
                 f"Error: {e}"
             )
-        return model.objects.all()
+
+        queryset = model.objects.all()
+        queryset = FastQuery(queryset)
+        return queryset
 
 
 class DjangoExecutor(Executor, DjangoQueryLogic):
