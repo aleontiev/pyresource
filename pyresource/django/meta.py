@@ -136,3 +136,7 @@ def get_limits(queryset):
 def clear_limits(queryset):
     query = queryset.query
     return query.clear_limits()
+
+def set_limits(queryset, start, stop):
+    query = queryset.query
+    return query.set_limits(start, stop)

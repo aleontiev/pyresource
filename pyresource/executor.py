@@ -1,6 +1,6 @@
 import base64
 import json
-import copy
+import copy as _copy
 
 from .exceptions import SerializationError, MethodNotAllowed, RequestError, ResourceMisconfigured
 from .conf import settings
@@ -26,26 +26,34 @@ def get_executor_class(engine):
 
 class Inspection:
     @classmethod
-    def _get_query_state(cls, query, level=None):
+    def _get_query_state(cls, query, level=None, copy=False):
         root = query.state
         field = root.get("field")
         if not field:
-            return query.get_state(level)
+            state = query.get_state(level)
+            if copy:
+                state = _copy.deepcopy(state)
+            return state
 
+        copy = True  # TODO
         state = None
         if level is None:
             # no state at the root, use initial state
             # remove all of the leveled features
-            state = copy.copy(root)
-            for feature in LEVELED_FEATURES:
-                state.pop(feature, None)
+            if copy:
+                state = _copy.copy(root)
+                for feature in LEVELED_FEATURES:
+                    state.pop(feature, None)
+            else:
+                state = root
         else:
             # shift the level, remove root features
             level = level.split(".")[1:] or None
             state = query.get_state(level)
-            state = copy.copy(state)
-            for feature in ROOT_FEATURES:
-                state.pop(feature, None)
+            if copy:
+                state = _copy.copy(state)
+                for feature in ROOT_FEATURES:
+                    state.pop(feature, None)
 
         return state
 
@@ -231,7 +239,7 @@ class Authorization:
         if can is None:
             can = default
         elif default is not None:
-            default = copy.copy(default)
+            default = _copy.copy(default)
             default.update(can)
             can = default
 
@@ -453,16 +461,18 @@ class Serialization:
 class Pagination:
     @classmethod
     def _decode_cursor(self, cursor):
-        return json.loads(base64.b64decode(cursor.decode("utf-8")))
+        return json.loads(base64.b64decode(cursor))
 
     @classmethod
     def _encode_cursor(self, cursor):
-        return base64.b64encode(json.dumps(cursor).encode("utf-8"))
+        return base64.b64encode(json.dumps(cursor).encode("utf-8")).decode()
 
     @classmethod
     def _get_next_page(cls, query, offset=None, level=None):
         # TODO: support keyset pagination
-        state = cls._get_query_state(query, level=level)
+        query = query.clone()
+
+        state = cls._get_query_state(query, level=level, copy=False)
         page = state.get("page", {})
         size = int(page.get("size", settings.PAGE_SIZE))
         page = page.get("after", None)
@@ -476,7 +486,14 @@ class Pagination:
             next_offset = offset
         else:
             next_offset = page.get("offset", 0) + offset
-        return cls._encode_cursor({"offset": next_offset})
+
+        cursor = cls._encode_cursor({"offset": next_offset})
+        if 'page' not in state:
+            state['page'] = {}
+        state['page']['after'] = cursor
+        Query = query.__class__
+        query = Query(state=state, server=query.server)
+        return query.encode()
 
 
 class Dispatch:

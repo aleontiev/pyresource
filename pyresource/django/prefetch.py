@@ -16,6 +16,7 @@ from django_cte import With, CTEManager
 from .meta import (
     has_limits,
     get_limits,
+    set_limits,
     clear_limits,
     get_model_field_and_type,
     get_remote_model,
@@ -327,11 +328,11 @@ class FastQuery(FastQueryCompatMixin, object):
             if k.step:
                 raise TypeError("Stepping not supported")
 
-            self.queryset.query.set_limits(start, stop)
+            set_limits(self.queryset, start, stop)
             # do not execute yet
             return self
         else:
-            self.queryset.query.set_limits(k, k+1)
+            set_limits(self.queryset, k, k+1)
             return self.execute()
 
     def __len__(self):
@@ -485,7 +486,8 @@ class FastQuery(FastQueryCompatMixin, object):
                 f'{reverse_field}__in': ids
             }
             if has_limits(base_qs):
-                # remove limits, then use RowNumber window function
+                # remove limits, then use CTE + RowNumber
+                # to re-introduce them using window functions
                 base_qs = base_qs._clone()
                 low, high = get_limits(base_qs)
                 clear_limits(base_qs)

@@ -700,8 +700,13 @@ class DjangoIntegrationTestCase(TestCase):
 
         ## paginating
 
-        page_1 = users.query.take("id").page(size=1).get(request=request)
-        after = base64.b64encode(json.dumps({"offset": 1}).encode("utf-8"))
+        page_1_query = users.query.take("id").page(size=1).action('get')
+        page_1 = page_1_query.execute(request=request)
+
+        # after is a b64-encoded query, which contains a b64-encoded pagination token
+        after = base64.b64encode(json.dumps({"offset": 1}).encode("utf-8")).decode()
+        after = page_1_query.page(after=after).encode()
+
         self.assertEqual(
             page_1,
             {
@@ -709,7 +714,9 @@ class DjangoIntegrationTestCase(TestCase):
                 "meta": {"page": {"data": {"after": after, "total": 2}}},
             },
         )
-        page_2 = users.query.take("id").page(size=1, after=after).get(request=request)
+        # to get the next page, pass the entire query back to the server
+        # this is helpful with nested pagination links
+        page_2 = server.query(after).execute(request=request)
         self.assertEqual(page_2, {"data": [{"id": str(userB.id)}]})
 
     def test_get_record_restricted(self):

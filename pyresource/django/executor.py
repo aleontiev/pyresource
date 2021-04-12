@@ -239,22 +239,6 @@ class DjangoQueryLogic:
         return queryset
 
     @classmethod
-    def _get_backref(
-        cls,
-        field
-    ):
-        resource = field.resource
-        source = resolver.get_field_source(field.source)
-        if '.' in source:
-            raise ValueError(
-                f'nested pagination is not supported over relationships '
-                f'with a nested source ({source})'
-            )
-        model = resolver.get_model(resource.source)
-        model_field = model._meta.get_field(source)
-        return model_field.remote_field.name
-
-    @classmethod
     def _add_queryset_pagination(
         cls, resource, fields, queryset, query, count=None, level=None, **context,
     ):
@@ -276,8 +260,8 @@ class DjangoQueryLogic:
         if after:
             try:
                 after = cls._decode_cursor(after)
-            except Exception:
-                raise QueryValidationError(f"page:after is invalid: {after}")
+            except Exception as e:
+                raise QueryValidationError(f"page:after is invalid: {after} ({str(e)})")
 
             if "offset" in after:
                 # offset-pagination
@@ -565,8 +549,8 @@ class DjangoExecutor(Executor, DjangoQueryLogic):
                         records = list(queryset)
                         num_records = len(records)
                         if num_records and num_records > page_size:
-                            cursor = self._get_next_page(query)
-                            page_data = {"after": cursor}
+                            link = self._get_next_page(query)
+                            page_data = {"after": link}
                             if count:
                                 page_data["total"] = count["total"]
                             if "page" not in meta:

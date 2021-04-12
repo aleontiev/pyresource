@@ -1,3 +1,5 @@
+import json
+import base64
 from collections import defaultdict
 from urllib.parse import parse_qs
 from .utils import (
@@ -55,6 +57,9 @@ class Query(WhereQueryMixin):
 
     def explain(self, id=None, field=None, **context):
         return self._call("explain", id=id, field=field, **context)
+
+    def encode(self):
+        return base64.b64encode(json.dumps(self.state).encode('utf-8')).decode()
 
     @cached_property
     def executor(self):
@@ -216,6 +221,9 @@ class Query(WhereQueryMixin):
     def __str__(self):
         return str(self.state)
 
+    def clone(self):
+        return self._update()
+
     def _update(self, args=None, level=None, merge=False, copy=True, **kwargs):
         if args:
             kwargs = args
@@ -303,7 +311,20 @@ class Query(WhereQueryMixin):
         return update
 
     @classmethod
+    def decode_state(cls, state):
+        try:
+            return json.loads(base64.b64decode(state))
+        except Exception:
+            return None
+
+    @classmethod
     def from_querystring(cls, querystring, **kwargs):
+        state = cls.decode_state(querystring)
+        if state is not None:
+            # querystring is encoded state
+            kwargs['state'] = state
+            return cls(**kwargs)
+
         result = cls(**kwargs)
         state = kwargs.get("state")
 
