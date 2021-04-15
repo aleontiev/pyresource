@@ -1,6 +1,7 @@
 """Tests on Django engine"""
 import base64
 import json
+from urllib.parse import quote
 from django.test import TestCase
 from pyresource import __version__
 from pyresource.space import Space
@@ -716,8 +717,24 @@ class DjangoIntegrationTestCase(TestCase):
         )
         # to get the next page, pass the entire query back to the server
         # this is helpful with nested pagination links
-        page_2 = server.query(after).execute(request=request)
+        page_2 = server.query(f'?query={quote(after)}').execute(request=request)
         self.assertEqual(page_2, {"data": [{"id": str(userB.id)}]})
+
+        # aggregating
+        user_stats_query = users.query.group({
+            "count": {'count': 'id'},
+            'max': {'max': 'email'}
+        })
+        user_stats = user_stats_query.get(request=request)
+        self.assertEqual(
+            user_stats, {
+                "data": {
+                    "count": 2,
+                    "max": 'email-14@test.com'
+                }
+            }
+        )
+
 
     def test_get_record_restricted(self):
         """Tests get_record as a non-superuser"""
@@ -980,6 +997,7 @@ class DjangoIntegrationTestCase(TestCase):
 
     # MVP TODOs:
     # [x] use prefetch for many-related fields instead of ArrayAgg (bugged) 
+    # [x] custom prefetcher to support nested pagination
     # [ ] group (aggregation)
     # [ ] hooks (before/after)
     # [ ] add

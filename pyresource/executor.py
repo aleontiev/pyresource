@@ -2,6 +2,7 @@ import base64
 import json
 import copy as _copy
 
+from .record import Record
 from .exceptions import SerializationError, MethodNotAllowed, RequestError, ResourceMisconfigured
 from .conf import settings
 from .resolver import SchemaResolver, RequestResolver
@@ -88,8 +89,20 @@ class Selection:
             take = {
                 resource.id_name: True
             }
+            group = None
         else:
             take = state.get("take")
+            group = state.get('group')
+
+        if group:
+            # if using agggregation
+            # do not use the resource's fields
+            # instead, create virtual fields representing the grouping
+            # these fields need to have a matching "name", "type" is optional
+            return [
+                Record(name=name, type=None, source=None)
+                for name in group.keys()
+            ]
 
         for field in fields:
             if take_field and level is None:
@@ -366,17 +379,25 @@ class Serialization:
             result = {}
             for field in fields:
                 name = field.name
-                type = field.type
+                record_key = f'.{name}'
                 use_context = True
                 if record:
                     # get from record provided
                     # use special .name properties that are added as annotations
-                    try:
-                        value = getattr(record, f".{name}")
-                        use_context = False
-                    except AttributeError as e:
-                        if f".{name}" not in str(e):
-                            raise
+                    if isinstance(record, dict):
+                        try:
+                            value = record[record_key]
+                            use_context = False
+                        except KeyError as e:
+                            if f".{name}" not in str(e):
+                                raise
+                    else:
+                        try:
+                            value = getattr(record, record_key)
+                            use_context = False
+                        except AttributeError as e:
+                            if f".{name}" not in str(e):
+                                raise
 
                 if use_context:
                     # get from context (request/query data)
@@ -404,7 +425,7 @@ class Serialization:
                     take is not None and isinstance(take.get(name), dict)
                 ):
                     # deep serialization
-                    link = get_link(type)
+                    link = get_link(field.type)
                     if link:
                         related = cls._resolve_resource(resource, link)
                         if level is None:

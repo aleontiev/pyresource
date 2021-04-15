@@ -396,9 +396,11 @@ class DjangoQueryLogic:
 
         aggregations = {}
         for name, aggregation in group.items():
-            aggregations[name] = cls._make_aggregation(aggregation)
+            # use .{name} for consistency with annotations/fields
+            aggregations[f'.{name}'] = cls._make_aggregation(aggregation)
 
-        return query.aggregate(**aggregations)
+        result = queryset.aggregate(**aggregations)
+        return result
 
     @classmethod
     def _get_queryset(
@@ -544,7 +546,11 @@ class DjangoExecutor(Executor, DjangoQueryLogic):
                         can=can,
                         **context,
                     )
-                    if endpoint == "resource":
+                    if isinstance(queryset, dict):
+                        # aggregate data
+                        # TODO: handle nested aggregates
+                        records = queryset
+                    elif endpoint == "resource":
                         # many records
                         records = list(queryset)
                         num_records = len(records)

@@ -269,6 +269,11 @@ class FastQueryCompatMixin(object):
         self.queryset = self.queryset.annotate(*args, **kwargs)
         return self
 
+    def aggregate(self, *args, **kwargs):
+        # TODO: support deferred aggregation similar to deferred limits
+        # this can be useful for nested prefetch cases
+        return self.queryset.aggregate(*args, **kwargs)
+
 
 class FastQuery(FastQueryCompatMixin, object):
 

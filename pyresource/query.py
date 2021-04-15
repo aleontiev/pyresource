@@ -17,6 +17,7 @@ from .features import (
     get_sort_fields,
     NestedFeature,
     ROOT_FEATURES,
+    QUERY,
     WHERE,
     TAKE,
     SORT,
@@ -390,6 +391,18 @@ class Query(WhereQueryMixin):
             query = parse_qs(remainder)
         else:
             query = {}
+
+        if QUERY in query:
+            query = query[QUERY]
+            if isinstance(query, list):
+                query = query[0]
+            state = cls.decode_state(query)
+            if state is not None:
+                # ?query=encoded-query
+                kwargs['state'] = state
+                return cls(**kwargs)
+            else:
+                raise ValueError(f'Invalid query: {query}')
 
         where = defaultdict(list)  # level -> [args]
         for key, value in query.items():

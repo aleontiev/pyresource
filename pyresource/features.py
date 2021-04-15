@@ -4,6 +4,7 @@ PAGE = 'page'
 INSPECT = 'inspect'
 ACTION = 'method'
 TAKE = 'take'
+QUERY = 'query'
 SORT = 'sort'
 GROUP = 'group'
 WHERE = 'where'
@@ -28,6 +29,7 @@ ROOT_FEATURES = {
     FIELD,
     ID,
     DATA,
+    QUERY,
     SPACE,
     RESOURCE,
     PARAMETERS
