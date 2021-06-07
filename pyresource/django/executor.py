@@ -482,11 +482,7 @@ class DjangoExecutor(Executor, DjangoQueryLogic):
     ):
         do_capture = isinstance(queries, dict)
         with maybe_capture_queries(capture=do_capture) as capture:
-            if resource is None:
-                server = query.server
-                resource = query.state.get('resource')
-                space = query.state.get('space')
-                resource = server.get_resource_by_id(f'{space}.{resource}')
+            resource = self._resource_from_query(query, resource)
 
             can = self._can(resource, f"get.{endpoint}", query, request)
             if not can:
@@ -513,7 +509,7 @@ class DjangoExecutor(Executor, DjangoQueryLogic):
                 # singleton -> assume fields are all computed
                 # e.g. user_id with source: ".request.user.id"
                 data = self._serialize(
-                    resource, fields, query=query, request=request, meta=meta
+                    resource, fields, query=query, request=request, meta=meta, field_prefix='.'
                 )
             else:
                 if resource.singleton:
@@ -532,6 +528,7 @@ class DjangoExecutor(Executor, DjangoQueryLogic):
                         request=request,
                         record=record,
                         meta=meta,
+                        field_prefix='.'
                     )
                 else:
                     count = (
@@ -577,6 +574,7 @@ class DjangoExecutor(Executor, DjangoQueryLogic):
                         query=query,
                         request=request,
                         meta=meta,
+                        field_prefix='.'
                     )
 
             result = {"data": data}
@@ -607,15 +605,6 @@ class DjangoExecutor(Executor, DjangoQueryLogic):
         field = query.state.get('field')
         field = resource.fields_by_name[field]
         return {"data": {"field": field.serialize()}}
-
-    def _resource_from_query(self, query, resource=None):
-        if resource is None:
-            server = query.server
-            resource = query.state.get('resource')
-            space = query.state.get('space')
-            resource = server.get_resource_by_id(f'{space}.{resource}')
-
-        return resource
 
     def add_resource(self, query, request=None, resource=None, **context):
         resource = self._resource_from_query(query, resource)
@@ -766,9 +755,6 @@ class DjangoExecutor(Executor, DjangoQueryLogic):
 
     def add_server(self, query, request=None, **context):
         return self._add_resources("server", query, request=request, **context)
-
-    def _add_resources(self, type, query, request=None, **context):
-        return
 
     def add_record(self, query, **context):
         raise MethodNotAllowed()

@@ -1,12 +1,13 @@
 from collections import defaultdict
 from decimal import Decimal
+from copy import copy
 
 from .conf import settings
 from .resource import Resource
 from .utils import cached_property
 from .utils.types import get_link, get_type_name, get_type_names, get_type_property
 from .resolver import SchemaResolver
-from .schemas import SpaceSchema
+from .schemas import SpaceSchema, Schemas
 
 
 class Space(Resource):
@@ -107,12 +108,13 @@ class Space(Resource):
                 parts = key.split('.')
                 resource_id = '.'.join(parts[0:-1])
                 field_name = parts[-1]
-                # todo: get field schema
+                field_schema = Schemas[resource_id].fields[field_name]
                 return Field(
                     id=key,
                     parent=self,
                     name=field_name,
                     resource=resource_id,
+                    **field_schema
                 )
             raise Exception(f'Invalid resource: {name}')
 

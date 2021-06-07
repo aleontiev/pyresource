@@ -17,10 +17,9 @@ def get_executor_class(engine):
     if engine == 'django':
         from .django.executor import DjangoExecutor
         return DjangoExecutor
-    elif engine == 'api':
-        raise NotImplementedError()
-    elif engine == 'resource':
-        raise NotImplementedError()
+    elif engine == 'meta':
+        from .meta.executor import MetaExecutor
+        return MetaExecutor
     else:
         raise NotImplementedError()
 
@@ -343,6 +342,7 @@ class Serialization:
         level=None,
         request=None,
         meta=None,
+        field_prefix=None
     ):
         """Deep serialization
 
@@ -353,10 +353,14 @@ class Serialization:
             level: a level string
             request: a Django request
             meta: a metadata dict
+            field_prefix: a prefix to add to field keys
 
         Returns:
             Serialized representation of record or list of records
         """
+        if not field_prefix:
+            field_prefix = ''
+
         results = []
         state = cls._get_query_state(query, level=level)
         field_name = query.state.get("field", None)
@@ -379,7 +383,7 @@ class Serialization:
             result = {}
             for field in fields:
                 name = field.name
-                record_key = f'.{name}'
+                record_key = f'{field_prefix}{name}'
                 use_context = True
                 if record:
                     # get from record provided
@@ -389,14 +393,14 @@ class Serialization:
                             value = record[record_key]
                             use_context = False
                         except KeyError as e:
-                            if f".{name}" not in str(e):
+                            if record_key not in str(e):
                                 raise
                     else:
                         try:
                             value = getattr(record, record_key)
                             use_context = False
                         except AttributeError as e:
-                            if f".{name}" not in str(e):
+                            if record_key not in str(e):
                                 raise
 
                 if use_context:
@@ -454,6 +458,7 @@ class Serialization:
                             query=query,
                             request=request,
                             meta=meta,
+                            field_prefix=field_prefix
                         )
                     elif field_name is None:
                         raise SerializationError(
@@ -519,12 +524,24 @@ class Pagination:
 
 class Dispatch:
     def _act(self, name, query, **context):
+        singleton = False
+        try:
+            resource = self._resource_from_query(query)
+            singleton = resource.singleton
+        except Exception:
+            pass
+
         state = query.state
         endpoint = None
         if state.get("field"):
             endpoint = "field"
         elif state.get("id"):
-            endpoint = "record"
+            if singleton:
+                # id provided, but really meant field
+                state['field'] = state.pop('id')
+                endpoint = "field"
+            else:
+                endpoint = "record"
         elif state.get("resource"):
             endpoint = "resource"
         elif state.get("space"):
@@ -536,18 +553,30 @@ class Dispatch:
         action = getattr(self, action_name, None)
         response = context.get("response")
         if response:
+            response_kwargs = {}
             if isinstance(response, bool):
                 response_cls = Response
             else:
                 response_cls = response
+                if 'json' in response_cls.__name__.lower():
+                    # allow non-dict in json response
+                    response_kwargs['safe'] = False
+
             # return as a response
             success = {"add": 201, "delete": 204}.get(name, 200)
             try:
-                return response_cls(action(query, **context), status=success)
+                response_kwargs['status'] = success
+                return response_cls(action(query, **context), **response_kwargs)
             except RequestError as e:
-                return response_cls(str(e), status=e.code)
+                response_kwargs['status'] = e.code
+                return response_cls(str(e), **response_kwargs)
             except Exception as e:
-                return response_cls(str(e), status=500)
+                import traceback
+                error = traceback.format_exc()
+                response_kwargs['status'] = 500
+                return response_cls({
+                    "error": error
+                }, **response_kwargs)
         else:
             return action(query, **context)
 
@@ -559,6 +588,16 @@ class Executor(
 
     def __init__(self, **context):
         self.context = context
+
+    def _resource_from_query(self, query, resource=None):
+        if resource is None:
+            server = query.server
+            resource = query.state.get('resource')
+            space = query.state.get('space')
+            key = f'{space}.{resource}' if space != settings.METASPACE_NAME else resource
+            resource = server.get_resource_by_id(key)
+
+        return resource
 
     def add(self, query, **context):
         return self._act("add", query, **context)

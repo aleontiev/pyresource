@@ -144,7 +144,7 @@ class Field(Resource):
         try:
             return validate(type, value)
         except TypeValidationError as e:
-            raise
+            raise TypeValidationError(f'Failed to validate {self.id}: {e}')
 
     def set_value(self, value, set_inverse=True):
         type = self.get_option('type')

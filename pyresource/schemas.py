@@ -1,17 +1,18 @@
 from .version import version
 
 
+can_type = {
+    "anyOf": [
+        {"type": "null"},
+        {"type": "array", "items": "string"},
+        {
+            "type": "object",
+            "additionalProperties": {"type": ["null", "boolean", "object"]},
+        },
+    ]
+}
 can = {
-    "type": {
-        "anyOf": [
-            {"type": "null"},
-            {"type": "array", "items": "string"},
-            {
-                "type": "object",
-                "additionalProperties": {"type": ["null", "boolean", "object"]},
-            },
-        ]
-    },
+    "type": can_type,
     "description": "A map from action name to access rule",
     "example": {
         "get": True,
@@ -225,8 +226,8 @@ class FieldSchema:
                             "type": "object",
                             "properties": {
                                 "value": "any",
-                                "label": "string",
-                                "can": can
+                                "can": can_type,
+                                "label": "string"
                             },
                             "required": ["value"]
                         }, {
@@ -274,3 +275,12 @@ class TypeSchema:
         "container": {"type": "boolean", "default": False},
         "server": {"type": "@server", "inverse": "types"},
     }
+
+
+Schemas = {
+    "server": ServerSchema,
+    "spaces": SpaceSchema,
+    "resources": ResourceSchema,
+    "fields": FieldSchema,
+    "types": TypeSchema,
+}

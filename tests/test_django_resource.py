@@ -896,12 +896,16 @@ class DjangoIntegrationTestCase(TestCase):
         server = get_server()
         tests = server.spaces_by_name["tests"]
         users = tests.resources_by_name["users"]
+        session = tests.resources_by_name["session"]
         groups = tests.resources_by_name["groups"]
 
         fixture = get_fixture()
         userA, userB, userC = fixture.users
         request = Request(userA)
         groupA, groupB, groupC = fixture.groups
+
+        singleton_get = server.query('tests/session/user').get(request=request)
+        self.assertEqual(singleton_get, {"data": str(userA.id)})
 
         ## selecting
         simple_get = users.query.get(userA.id, "first_name", request=request)
@@ -992,6 +996,46 @@ class DjangoIntegrationTestCase(TestCase):
             content,
             {
                 "data": userA.email
+            }
+        )
+
+    def test_meta_get_server(self):
+        response = self.client.get(
+            '/api/./server/'
+        )
+        content = json.loads(response.content)
+        self.assertEqual(
+            content,
+            {
+                "data": {
+                    "version": "0.0.1",
+                    "url": "http://localhost/api/",
+                    "spaces": ["tests", "."],
+                    "can": None,
+                    "source": None,
+                    "features": {
+                        "take": True,
+                        "where": True,
+                        "page": {
+                            "size": 50,
+                            "max_size": 100
+                        },
+                        "group": True,
+                        "sort": True,
+                        "inspect": True,
+                        "action": True,
+                    },
+                    "types": types
+                }
+            }
+        )
+
+        response = self.client.get('/api/./server/spaces')
+        content = json.loads(response.content)
+        self.assertEqual(
+            content,
+            {
+                "data": ["tests", "."]
             }
         )
 

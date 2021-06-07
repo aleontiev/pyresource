@@ -497,6 +497,9 @@ class FastQuery(FastQueryCompatMixin, object):
                 low, high = get_limits(base_qs)
                 clear_limits(base_qs)
                 order_by = base_qs.query.order_by
+                if not order_by:
+                    # if there is no order, we need to use pk
+                    order_by = ['pk']
                 cte = With(
                     base_qs.annotate(**{
                         '..row': Window(
