@@ -999,6 +999,337 @@ class DjangoIntegrationTestCase(TestCase):
             }
         )
 
+    def test_meta_get_fields(self):
+        response = self.client.get(
+            '/api/./fields/?take=id'
+        )
+        content = json.loads(response.content)
+        self.assertEqual(
+            content,
+            {
+                "data": [
+                    {
+                        "id": "tests.session.user"
+                    },
+                    {
+                        "id": "tests.groups.id"
+                    },
+                    {
+                        "id": "tests.groups.name"
+                    },
+                    {
+                        "id": "tests.groups.users"
+                    },
+                    {
+                        "id": "tests.groups.created"
+                    },
+                    {
+                        "id": "tests.groups.updated"
+                    },
+                    {
+                        "id": "tests.users.id"
+                    },
+                    {
+                        "id": "tests.users.first_name"
+                    },
+                    {
+                        "id": "tests.users.last_name"
+                    },
+                    {
+                        "id": "tests.users.name"
+                    },
+                    {
+                        "id": "tests.users.email"
+                    },
+                    {
+                        "id": "tests.users.num_groups"
+                    },
+                    {
+                        "id": "tests.users.groups"
+                    },
+                    {
+                        "id": "tests.users.is_superuser"
+                    },
+                    {
+                        "id": "tests.users.created"
+                    },
+                    {
+                        "id": "tests.users.updated"
+                    },
+                    {
+                        "id": "tests.users.location"
+                    },
+                    {
+                        "id": "spaces.server"
+                    },
+                    {
+                        "id": "spaces.url"
+                    },
+                    {
+                        "id": "spaces.name"
+                    },
+                    {
+                        "id": "spaces.can"
+                    },
+                    {
+                        "id": "spaces.resources"
+                    },
+                    {
+                        "id": "resources.id"
+                    },
+                    {
+                        "id": "resources.source"
+                    },
+                    {
+                        "id": "resources.url"
+                    },
+                    {
+                        "id": "resources.name"
+                    },
+                    {
+                        "id": "resources.singleton"
+                    },
+                    {
+                        "id": "resources.description"
+                    },
+                    {
+                        "id": "resources.engine"
+                    },
+                    {
+                        "id": "resources.space"
+                    },
+                    {
+                        "id": "resources.fields"
+                    },
+                    {
+                        "id": "resources.can"
+                    },
+                    {
+                        "id": "resources.parameters"
+                    },
+                    {
+                        "id": "resources.features"
+                    },
+                    {
+                        "id": "resources.before"
+                    },
+                    {
+                        "id": "resources.after"
+                    },
+                    {
+                        "id": "resources.abstract"
+                    },
+                    {
+                        "id": "types.name"
+                    },
+                    {
+                        "id": "types.base"
+                    },
+                    {
+                        "id": "types.children"
+                    },
+                    {
+                        "id": "types.container"
+                    },
+                    {
+                        "id": "types.server"
+                    },
+                    {
+                        "id": "fields.id"
+                    },
+                    {
+                        "id": "fields.resource"
+                    },
+                    {
+                        "id": "fields.source"
+                    },
+                    {
+                        "id": "fields.inverse"
+                    },
+                    {
+                        "id": "fields.name"
+                    },
+                    {
+                        "id": "fields.can"
+                    },
+                    {
+                        "id": "fields.url"
+                    },
+                    {
+                        "id": "fields.options"
+                    },
+                    {
+                        "id": "fields.depends"
+                    },
+                    {
+                        "id": "fields.description"
+                    },
+                    {
+                        "id": "fields.example"
+                    },
+                    {
+                        "id": "fields.type"
+                    },
+                    {
+                        "id": "fields.unique"
+                    },
+                    {
+                        "id": "fields.lazy"
+                    },
+                    {
+                        "id": "fields.index"
+                    },
+                    {
+                        "id": "fields.primary"
+                    },
+                    {
+                        "id": "fields.default"
+                    },
+                    {
+                        "id": "server.version"
+                    },
+                    {
+                        "id": "server.url"
+                    },
+                    {
+                        "id": "server.spaces"
+                    },
+                    {
+                        "id": "server.source"
+                    },
+                    {
+                        "id": "server.can"
+                    },
+                    {
+                        "id": "server.features"
+                    },
+                    {
+                        "id": "server.types"
+                    }
+                ]
+            }
+        )
+
+    def test_meta_get_resources(self):
+        response = self.client.get(
+            '/api/./resources/?take=id'
+        )
+        content = json.loads(response.content)
+        self.assertEqual(
+            content,
+            {
+                "data": [{
+                    'id': 'tests.session'
+                }, {
+                    'id': 'tests.groups'
+                }, {
+                    'id': 'tests.users'
+                }, {
+                    'id': 'spaces'
+                }, {
+                    'id': 'resources'
+                }, {
+                    'id': 'types'
+                }, {
+                    'id': 'fields'
+                }, {
+                    'id': 'server'
+                }]
+             }
+        )
+
+        response = self.client.get(
+            '/api/./resources/tests.session/'
+        )
+        content = json.loads(response.content)
+        self.assertEqual(
+            content,
+            {
+                "data": {
+                    "abstract": False,
+                    "after": None,
+                    "before": None,
+                    "can": {
+                        "explain": True,
+                        "get": True,
+                        "login.resource": True,
+                        "logout.resource": True,
+                    },
+                    "description": None,
+                    "engine": "django",
+                    "features": None,
+                    "fields": ["tests.session.user"],
+                    "id": "tests.session",
+                    "name": "session",
+                    "parameters": None,
+                    "singleton": True,
+                    "source": None,
+                    "space": "tests",
+                    "url": "http://localhost/api/tests/session/"
+                }
+            }
+        )
+        response = self.client.get(
+            '/api/./resources/tests.session/url'
+        )
+        content = json.loads(response.content)
+        self.assertEqual(
+            content,
+            {"data": "http://localhost/api/tests/session/"}
+        )
+
+    def test_meta_get_spaces(self):
+        response = self.client.get(
+            '/api/./spaces/'
+        )
+        content = json.loads(response.content)
+        self.assertEqual(
+            content,
+            {
+                "data": [{
+                    "can": None,
+                    "name": "tests",
+                    "resources": ["tests.session", "tests.groups", "tests.users"],
+                    "server": "http://localhost/api/",
+                    "url": "http://localhost/api/tests/"
+                }, {
+                    "can": None,
+                    "name": ".",
+                    "resources": ["spaces", "resources", "types", "fields", "server"],
+                    "server": "http://localhost/api/",
+                    "url": "http://localhost/api/./"
+                }]
+            }
+        )
+
+        response = self.client.get(
+            '/api/./spaces/tests/'
+        )
+        content = json.loads(response.content)
+        self.assertEqual(
+            content,
+            {
+                "data": {
+                    "can": None,
+                    "name": "tests",
+                    "resources": ["tests.session", "tests.groups", "tests.users"],
+                    "server": "http://localhost/api/",
+                    "url": "http://localhost/api/tests/"
+                }
+            }
+        )
+
+        response = self.client.get(
+            '/api/./spaces/tests/url/'
+        )
+        content = json.loads(response.content)
+        self.assertEqual(
+            content,
+            {
+                "data": "http://localhost/api/tests/"
+            }
+        )
+
     def test_meta_get_server(self):
         response = self.client.get(
             '/api/./server/'
