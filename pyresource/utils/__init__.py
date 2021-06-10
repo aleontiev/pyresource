@@ -3,6 +3,21 @@ from django.template import Template, Context
 from django.utils.functional import cached_property  # noqa
 
 
+class reversor(object):
+    """reversor for sort comparisons"""
+    def __init__(self, x):
+        self.x = x
+
+    def __eq__(self, other):
+        return self.x == other.x
+
+    def __lt__(self, other):
+        return other.x < self.x
+
+    def __repr__(self):
+        return f'-{repr(self.x)}'
+
+
 def resolve(template, context):
     template = Template(template)
     context = Context(context)

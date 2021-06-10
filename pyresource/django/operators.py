@@ -171,7 +171,7 @@ comparison_operators = {
     'range': range_,
     '-range': not_range,
     'not.range': not_range,
-    'isnull': isnull,
+    'is.null': isnull,
     'null': isnull,
     '-null': not_null,
     'not.null': not_null,

@@ -1212,32 +1212,52 @@ class DjangoIntegrationTestCase(TestCase):
 
     def test_meta_get_resources(self):
         response = self.client.get(
-            '/api/./resources/?take=id'
+            '/api/./resources/?take=id&sort=-name'
         )
         content = json.loads(response.content)
         self.assertEqual(
             content,
             {
                 "data": [{
-                    'id': 'tests.session'
-                }, {
-                    'id': 'tests.groups'
-                }, {
                     'id': 'tests.users'
-                }, {
-                    'id': 'spaces'
-                }, {
-                    'id': 'resources'
                 }, {
                     'id': 'types'
                 }, {
-                    'id': 'fields'
+                    'id': 'spaces'
+                }, {
+                    'id': 'tests.session'
                 }, {
                     'id': 'server'
+                }, {
+                    'id': 'resources'
+                }, {
+                    'id': 'tests.groups'
+                }, {
+                    'id': 'fields'
                 }]
              }
         )
 
+        response = self.client.get(
+            '/api/./resources/?take=id&sort=-name&where:space.name="."'
+        )
+        content = json.loads(response.content)
+        self.assertEqual(
+            content,
+            {
+                "data": [{
+                    'id': 'types'
+                }, {
+                    'id': 'spaces'
+                }, {
+                    'id': 'server'
+                }, {
+                    'id': 'resources'
+                }, {
+                    'id': 'fields'
+                }]
+             }
+        )
         response = self.client.get(
             '/api/./resources/tests.session/'
         )
@@ -1298,6 +1318,36 @@ class DjangoIntegrationTestCase(TestCase):
                     "resources": ["spaces", "resources", "types", "fields", "server"],
                     "server": "http://localhost/api/",
                     "url": "http://localhost/api/./"
+                }]
+            }
+        )
+
+        response = self.client.get(
+            '/api/./spaces/?where:name="tests"'
+        )
+        content = json.loads(response.content)
+        self.assertEqual(
+            content,
+            {
+                "data": [{
+                    "can": None,
+                    "name": "tests",
+                    "resources": ["tests.session", "tests.groups", "tests.users"],
+                    "server": "http://localhost/api/",
+                    "url": "http://localhost/api/tests/"
+                }]
+            }
+        )
+
+        response = self.client.get(
+            '/api/./spaces/?where:name:contains="t"&take=name'
+        )
+        content = json.loads(response.content)
+        self.assertEqual(
+            content,
+            {
+                "data": [{
+                    "name": "tests",
                 }]
             }
         )

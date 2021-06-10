@@ -1,6 +1,7 @@
 from itertools import chain
 
 from pyresource.executor import Executor
+from pyresource.utils import reversor, get
 from pyresource.exceptions import (
     Forbidden,
     FilterError,
@@ -13,6 +14,7 @@ from pyresource.exceptions import (
     MethodNotAllowed,
 )
 from pyresource.conf import settings
+from pyresource.expression import execute
 
 
 class MetaExecutor(Executor):
@@ -27,32 +29,71 @@ class MetaExecutor(Executor):
         return self._get_resource("resource", query, request=request, **context)
 
     def _get_by_id(self, data, id, field='id'):
-        for d in data:
-            d_id = getattr(d, field)
-            if d_id == id:
-                return d
+        for item in data:
+            item_id = getattr(item, field)
+            if item_id == id:
+                return item
         raise NotFound()
 
-    def _get_data(self, resource, fields, query, request=None, can=None, **context):
+    def _item_match(self, where, item, request=None, **context):
+        ctx = {}
+        ctx['request'] = request
+        ctx['fields'] = item
+        return execute(where, ctx)
+
+    def _item_sort(self, sort, item):
+        return tuple(
+            reversor(get(s[1:], item)) if s[0] == '-' else get(s, item)
+            for s in sort
+        )
+
+    def _group(self, group, data):
+        return data
+
+    def _filter(self, query, resource, data, request=None, can=None, **context):
+        # apply where/sort/group
+        where = query.state.get('where')
+        sort = query.state.get('sort')
+        group = query.state.get('group')
+        if where:
+            data = [item for item in data if self._item_match(where, item, request=request, **context)]
+        if sort:
+            data.sort(key=lambda item: self._item_sort(sort, item))
+        if group:
+            data = self._group(group, data)
+        return data
+
+    def _get_data(self, query, resource, fields, request=None, can=None, **context):
         server = query.server
         resource_id = resource.id
         record_id = query.state.get('id')
+        id_field = 'id'
         if resource_id == 'server':
+            # singleton, no filtering possible
             return server
+        # TODO: support filter (where), ordering (sort), aggregation (group) in this space
+        # probably no need to support pagination
         elif resource_id == 'spaces':
-            spaces = server.spaces
-            return self._get_by_id(spaces, record_id, field='name') if record_id else spaces
+            data = server.spaces
+            id_field = 'name'
         elif resource_id == 'resources':
             spaces = server.spaces
-            resources = list(chain.from_iterable((space.resources for space in spaces)))
-            return self._get_by_id(resources, record_id) if record_id else resources
+            data = list(chain.from_iterable((space.resources for space in spaces)))
         elif resource_id == 'fields':
             spaces = server.spaces
             resources = chain.from_iterable((space.resources for space in spaces))
-            fields = list(chain.from_iterable((resource.fields for resource in resources)))
-            return self._get_by_id(fields, record_id) if record_id else fields
+            data = list(chain.from_iterable((resource.fields for resource in resources)))
         else:
             raise NotImplementedError()
+
+        return self._get_by_id(data, record_id, field=id_field) if record_id else self._filter(
+            query,
+            resource,
+            data,
+            request=request,
+            can=can,
+            **context
+        )
 
     def _get_resource(
         self, endpoint, query, request=None, prefix=None, resource=None, **context
@@ -71,7 +112,7 @@ class MetaExecutor(Executor):
         )
 
         record = self._get_data(
-            resource, fields, query, request=request, can=can, **context
+            query, resource, fields, request=request, can=can, **context
         )
         data = self._serialize(
             resource,
