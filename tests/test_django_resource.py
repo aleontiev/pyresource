@@ -15,6 +15,7 @@ from pyresource.schemas import (
     ServerSchema,
     TypeSchema
 )
+from pyresource.conf import settings
 from tests.models import User, Group, Location
 from .server import get_server
 from .utils import Request, Fixture
@@ -228,7 +229,7 @@ class DjangoIntegrationTestCase(TestCase):
             {
                 "version": "0.0.1",
                 "url": "http://localhost/api/",
-                "spaces": ["tests", "."],
+                "spaces": ["tests", self._],
                 "can": None,
                 "source": None,
                 "features": {
@@ -279,11 +280,11 @@ class DjangoIntegrationTestCase(TestCase):
 
         self.assertEqual(
             server.query.get(request=request),
-            {"data": {"tests": "./tests/", ".": "././"}},
+            {"data": {"tests": "./tests/", f"{self._}": f"./{self._}/"}},
         )
 
         response = server.query.get(request=request, response=True)
-        self.assertEqual(response.data, {"data": {"tests": "./tests/", ".": "././"}})
+        self.assertEqual(response.data, {"data": {"tests": "./tests/", f"{self._}": f"./{self._}/"}})
         self.assertEqual(response.code, 200)
 
         get_all = (
@@ -957,7 +958,7 @@ class DjangoIntegrationTestCase(TestCase):
         # get.server
         response = self.client.get('/api/')
         content = json.loads(response.content)
-        self.assertEqual(content, {'data': {'tests': './tests/', '.': '././'}})
+        self.assertEqual(content, {'data': {'tests': './tests/', self._: f'./{self._}/'}})
 
         # get.space 
         response = self.client.get('/api/tests/')
@@ -999,9 +1000,11 @@ class DjangoIntegrationTestCase(TestCase):
             }
         )
 
+    _ = settings.METASPACE_NAME
+
     def test_meta_get_fields(self):
         response = self.client.get(
-            '/api/./fields/?take=id'
+            f'/api/{self._}/fields/?take=id'
         )
         content = json.loads(response.content)
         self.assertEqual(
@@ -1212,7 +1215,7 @@ class DjangoIntegrationTestCase(TestCase):
 
     def test_meta_get_resources(self):
         response = self.client.get(
-            '/api/./resources/?take=id&sort=-name'
+            f'/api/{self._}/resources/?take=id&sort=-name'
         )
         content = json.loads(response.content)
         self.assertEqual(
@@ -1239,7 +1242,7 @@ class DjangoIntegrationTestCase(TestCase):
         )
 
         response = self.client.get(
-            '/api/./resources/?take=id&sort=-name&where:space.name="."'
+            f'/api/{self._}/resources/?take=id&sort=-name&where:space.name="{self._}"'
         )
         content = json.loads(response.content)
         self.assertEqual(
@@ -1259,7 +1262,7 @@ class DjangoIntegrationTestCase(TestCase):
              }
         )
         response = self.client.get(
-            '/api/./resources/tests.session/'
+            f'/api/{self._}/resources/tests.session/'
         )
         content = json.loads(response.content)
         self.assertEqual(
@@ -1290,7 +1293,7 @@ class DjangoIntegrationTestCase(TestCase):
             }
         )
         response = self.client.get(
-            '/api/./resources/tests.session/url'
+            f'/api/{self._}/resources/tests.session/url'
         )
         content = json.loads(response.content)
         self.assertEqual(
@@ -1300,7 +1303,7 @@ class DjangoIntegrationTestCase(TestCase):
 
     def test_meta_get_spaces(self):
         response = self.client.get(
-            '/api/./spaces/'
+            f'/api/{self._}/spaces/'
         )
         content = json.loads(response.content)
         self.assertEqual(
@@ -1314,16 +1317,16 @@ class DjangoIntegrationTestCase(TestCase):
                     "url": "http://localhost/api/tests/"
                 }, {
                     "can": None,
-                    "name": ".",
+                    "name": self._,
                     "resources": ["spaces", "resources", "types", "fields", "server"],
                     "server": "http://localhost/api/",
-                    "url": "http://localhost/api/./"
+                    "url": f"http://localhost/api/{self._}/"
                 }]
             }
         )
 
         response = self.client.get(
-            '/api/./spaces/?where:name="tests"'
+            f'/api/{self._}/spaces/?where:name="tests"'
         )
         content = json.loads(response.content)
         self.assertEqual(
@@ -1340,7 +1343,7 @@ class DjangoIntegrationTestCase(TestCase):
         )
 
         response = self.client.get(
-            '/api/./spaces/?where:name:contains="t"&take=name'
+            f'/api/{self._}/spaces/?where:name:contains="t"&take=name'
         )
         content = json.loads(response.content)
         self.assertEqual(
@@ -1353,7 +1356,7 @@ class DjangoIntegrationTestCase(TestCase):
         )
 
         response = self.client.get(
-            '/api/./spaces/tests/'
+            f'/api/{self._}/spaces/tests/'
         )
         content = json.loads(response.content)
         self.assertEqual(
@@ -1370,7 +1373,7 @@ class DjangoIntegrationTestCase(TestCase):
         )
 
         response = self.client.get(
-            '/api/./spaces/tests/url/'
+            f'/api/{self._}/spaces/tests/url/'
         )
         content = json.loads(response.content)
         self.assertEqual(
@@ -1382,7 +1385,7 @@ class DjangoIntegrationTestCase(TestCase):
 
     def test_meta_get_server(self):
         response = self.client.get(
-            '/api/./server/'
+            f'/api/{self._}/server/'
         )
         content = json.loads(response.content)
         self.assertEqual(
@@ -1391,7 +1394,7 @@ class DjangoIntegrationTestCase(TestCase):
                 "data": {
                     "version": "0.0.1",
                     "url": "http://localhost/api/",
-                    "spaces": ["tests", "."],
+                    "spaces": ["tests", self._],
                     "can": None,
                     "source": None,
                     "features": {
@@ -1411,12 +1414,12 @@ class DjangoIntegrationTestCase(TestCase):
             }
         )
 
-        response = self.client.get('/api/./server/spaces')
+        response = self.client.get(f'/api/{self._}/server/spaces')
         content = json.loads(response.content)
         self.assertEqual(
             content,
             {
-                "data": ["tests", "."]
+                "data": ["tests", self._]
             }
         )
 
