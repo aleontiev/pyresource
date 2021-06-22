@@ -99,6 +99,16 @@ class MetaExecutor(Executor):
         self, endpoint, query, request=None, prefix=None, resource=None, **context
     ):
         resource = self._resource_from_query(query, resource)
+
+        if resource.id == 'server':
+            print(query.state)
+        if resource.id == 'server' and query.state.get('parameters', {}).get('all'):
+            # shorthand for take all
+            query._take(None, '*', copy=False)
+            query._take('spaces', '*', copy=False)
+            query._take('spaces.resources', '*', copy=False)
+            query._take('spaces.resources.fields', '*', copy=False)
+
         can = self._can(resource, f"get.{endpoint}", query, request)
         if not can:
             raise Forbidden()

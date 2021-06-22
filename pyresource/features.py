@@ -2,7 +2,7 @@ import re
 
 PAGE = 'page'
 INSPECT = 'inspect'
-ACTION = 'method'
+ACTION = 'action'
 TAKE = 'take'
 QUERY = 'query'
 SORT = 'sort'
@@ -51,8 +51,7 @@ def get_feature(key):
         feature = feature.group(0).lower()
     else:
         feature = None
-
-    return feature
+    return feature if feature in FEATURES else None
 
 
 def get_feature_separator(feature):

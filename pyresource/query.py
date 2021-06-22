@@ -18,6 +18,7 @@ from .features import (
     NestedFeature,
     ROOT_FEATURES,
     QUERY,
+    PARAMETERS,
     WHERE,
     TAKE,
     SORT,
@@ -408,38 +409,42 @@ class Query(WhereQueryMixin):
         for key, value in query.items():
             feature = get_feature(key)
             separator = get_feature_separator(feature)
-
-            # determine level
-            parts = key.split(separator)
-            feature_part = parts[0]
-
             level = None
-            if "." in feature_part:
-                level = ".".join(feature_part.split(".")[1:])
-                if not level:
-                    level = None
-
-            parts = parts[1:]
-
-            # handle WHERE separately because of special expression parsing
-            # that can join together multiple conditions
-            if feature == WHERE:
-                parts.append(value)
-                where[level].append(parts)
-                continue
-
-            # coerce value based on feature name
-            update_key = feature
-            if feature == TAKE:
-                value = get_take_fields(value)
-            elif feature == SORT:
-                value = get_sort_fields(value)
-            else:
+            if feature is None:
+                update_key = PARAMETERS
+                parts = [key]
                 value = coerce_query_values(value)
+            else:
+                # determine level
+                parts = key.split(separator)
+                feature_part = parts[0]
 
-            if update_key == "page" and not parts:
-                # default key for page = cursor
-                parts = ["cursor"]
+                if "." in feature_part:
+                    level = ".".join(feature_part.split(".")[1:])
+                    if not level:
+                        level = None
+
+                parts = parts[1:]
+
+                # handle WHERE separately because of special expression parsing
+                # that can join together multiple conditions
+                if feature == WHERE:
+                    parts.append(value)
+                    where[level].append(parts)
+                    continue
+
+                # coerce value based on feature name
+                update_key = feature
+                if feature == TAKE:
+                    value = get_take_fields(value)
+                elif feature == SORT:
+                    value = get_sort_fields(value)
+                else:
+                    value = coerce_query_values(value)
+
+                if update_key == "page" and not parts:
+                    # default key for page = cursor
+                    parts = ["cursor"]
 
             update = cls._build_update(parts, update_key, value)
             result._update(update, level=level, merge=feature != SORT, copy=False)
