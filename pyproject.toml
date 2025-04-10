@@ -17,6 +17,7 @@ django = "^2.2.4"
 ipython = "^7.10.2"
 pytest-django = "^4.1.0"
 psycopg2 = "^2.8.6"
+django-cors-headers = "^3.7.0"
 
 [build-system]
 requires = ["poetry>=0.12"]

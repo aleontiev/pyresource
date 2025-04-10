@@ -16,11 +16,8 @@ can = {
     "description": "A map from action name to access rule",
     "example": {
         "get": True,
-        "clone.record": {
-            "or": [
-                {"not": {"<": ["updated", "created"]}},
-                {"not.in": {"location.name": ["'USA'", "'UK'"]}},
-            ]
+        "set": {
+            "<": ["updated", "created"]
         },
     },
 }
@@ -39,13 +36,11 @@ class ResourceSchema:
             "primary": True,
             "type": "string",
             "description": "Identifies the resource within the server",
-            "example": "resources",
             "default": {"concat": ["space.name", '"."', "name"]},
         },
         "source": {
             "type": "any",
-            "description": "Null, string, or object",
-            "example": {"source": "auth.user", "where": {"=": ["is_active", True]}},
+            "description": "Null, string, or object describing the datasource",
         },
         "url": {
             "type": "string",
@@ -55,7 +50,6 @@ class ResourceSchema:
         "name": {
             "type": "string",
             "description": "Identifies the resource within its space",
-            "example": "resources",
         },
         "singleton": {
             "type": "boolean",
@@ -89,7 +83,6 @@ class ResourceSchema:
                 ]
             },
             "description": "An object of custom input keys",
-            "example": {"clone.record": {"remap": {"type": "object"}}}
         },
         "features": {
             "type": ["null", "object"],
@@ -101,27 +94,26 @@ class ResourceSchema:
                 "where": False,
             },
         },
+        "labels": {
+            "type": {
+                "anyOf": [
+                    {"type": "null"},
+                    {"type": "array", "items": "string"}
+                ]
+            },
+            "description": "Optional set of string labels"
+        },
+        "label": {
+            "type": ["string", "null"],
+            "description": "Optional label"
+        },
         "before": {
             "type": ["null", "object"],
             "description": "Map of pre-event handlers",
-            "example": {
-                "delete": {
-                    "verify": {
-                        "or": [
-                            {'=': [".request.user.id", '"owner"']},
-                            {'contains': [".request.user.roles", '"superuser"']}
-                        ]
-                    },
-                }
-            },
         },
         "after": {
             "type": ["null", "object"],
             "description": "Map of post-event handlers",
-            "example": {
-                "get.record": {"webhook": "https://webhooks.io/example/"},
-                "add": {"increment": "creator.num_created"},
-            },
         },
         "abstract": {"type": "boolean", "default": False},
     }

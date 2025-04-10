@@ -100,8 +100,6 @@ class MetaExecutor(Executor):
     ):
         resource = self._resource_from_query(query, resource)
 
-        if resource.id == 'server':
-            print(query.state)
         if resource.id == 'server' and query.state.get('parameters', {}).get('all'):
             # shorthand for take all
             query._take(None, '*', copy=False)

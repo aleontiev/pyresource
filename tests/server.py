@@ -22,54 +22,58 @@ def get_server():
 
     tests = Space(name="tests", server=server)
 
-    def login(resource, request, query):
-        api_key = query.state("body").get("api_key")
-        api_key = json.loads(str(base64.b64decode(api_key)))
-        if authenticate(username, password):
-            pass
-
-    def logout(resource, request, query):
+    def logout(resource, request, query, data):
         pass
 
-    def change_password(resource, request, query):
+    def change_password(resource, request, query, data):
         pass
 
+    def login(resource, request, query, data):
+        if query.state.get("action") not in {"add", "set"}:
+            return request.user
+
+        if not data or not isinstance(data, dict) or 'username' not in data or 'password' not in data:
+            raise BadRequest("session.login: must provide a data object with 'username' and 'password'")
+
+        username = data['username']
+        password = data['password']
+        if not authenticate(username, password):
+            raise BadRequest("session.login: username and password are not correct")
+        return True
+
+    # PUT /session/?take=user {"data": {"login": {"username": ..., "password": ...}}
+    # -> {"data": {"user": ...}}
+
+    # or
+
+    # PUT /session/login?take=. {"data": {"username": ..., "password": ...}}
+    # -> {"data": {}}
     session = Resource(
         id="tests.session",
         name="session",
         space=tests,
         singleton=True,
         can={
-            "login.resource": True,
-            "logout.resource": True,
             "get": True,
+            "set": True,
             "explain": True
         },
         fields={
             "user": {
                 "type": ["null", "@users"],
-                "source": ".request.user"
-            }
-        },
-        actions={
-            "login": {
-                "method": login,
-                "fields": {
-                    "username": {
-                        "type": "string",
-                        "can": {"get": False}
-                    },
-                    "password": {
-                        "type": "string",
-                        "can": {"get": False}
-                    },
-                    "status": {
-                        "type": "string",
-                        "can": {"set": False}
-                    },
-                },
+                "source": ".request.user",
+                "can": {"set": False, "get": True}
             },
-            "logout": logout,
+            "login": {
+                "type": ["null", "object"],
+                "source": login,
+                "can": {"get": False, "set": True}
+            },
+            "logout": {
+                "type": "null",
+                "source": logout,
+                "can": {"get": False, "set": True}
+            }
         },
     )
     groups = Resource(

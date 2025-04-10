@@ -71,6 +71,17 @@ argon2 = ["argon2-cffi (>=16.1.0)"]
 bcrypt = ["bcrypt"]
 
 [[package]]
+category = "dev"
+description = "django-cors-headers is a Django application for handling the server headers required for Cross-Origin Resource Sharing (CORS)."
+name = "django-cors-headers"
+optional = false
+python-versions = ">=3.6"
+version = "3.7.0"
+
+[package.dependencies]
+Django = ">=2.2"
+
+[[package]]
 category = "main"
 description = "Common Table Expressions (CTE) for Django"
 name = "django-cte"
@@ -82,6 +93,7 @@ version = "1.1.5"
 reference = "82b69f6b79a31796046d8d50f96d8053f4260b79"
 type = "git"
 url = "https://github.com/aleontiev/django-cte"
+
 [[package]]
 category = "dev"
 description = "Read metadata from Python packages"
@@ -377,7 +389,7 @@ docs = ["sphinx", "jaraco.packaging (>=3.2)", "rst.linker (>=1.9)"]
 testing = ["pathlib2", "contextlib2", "unittest2"]
 
 [metadata]
-content-hash = "8fb57c2b34722832d00431404c8e423075232d67f1fa6b1a98e15633de3ca304"
+content-hash = "8757e324fc71fbe73cf8eb4e155e9ea6fb2f5ee81d1b5f746853beac15a81464"
 python-versions = "^3.7"
 
 [metadata.files]
@@ -408,6 +420,10 @@ decorator = [
 django = [
     {file = "Django-2.2.4-py3-none-any.whl", hash = "sha256:9a2f98211ab474c710fcdad29c82f30fc14ce9917c7a70c3682162a624de4035"},
     {file = "Django-2.2.4.tar.gz", hash = "sha256:16a5d54411599780ac9dfe3b9b38f90f785c51259a584e0b24b6f14a7f69aae8"},
+]
+django-cors-headers = [
+    {file = "django-cors-headers-3.7.0.tar.gz", hash = "sha256:96069c4aaacace786a34ee7894ff680780ec2644e4268b31181044410fecd12e"},
+    {file = "django_cors_headers-3.7.0-py3-none-any.whl", hash = "sha256:1ac2b1213de75a251e2ba04448da15f99bcfcbe164288ae6b5ff929dc49b372f"},
 ]
 django-cte = []
 importlib-metadata = [

@@ -1114,6 +1114,12 @@ class DjangoIntegrationTestCase(TestCase):
                         "id": "resources.features"
                     },
                     {
+                        "id": "resources.labels"
+                    },
+                    {
+                        "id": "resources.label"
+                    },
+                    {
                         "id": "resources.before"
                     },
                     {
@@ -1282,6 +1288,8 @@ class DjangoIntegrationTestCase(TestCase):
                     "engine": "django",
                     "features": None,
                     "fields": ["tests.session.user"],
+                    "labels": None,
+                    "label": None,
                     "id": "tests.session",
                     "name": "session",
                     "parameters": None,
